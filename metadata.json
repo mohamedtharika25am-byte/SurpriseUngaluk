@@ -1,0 +1,6 @@
+{
+  "name": "Birthday & Wedding Surprise App",
+  "description": "Create and share personalized birthday, wedding, and anniversary surprises with countdown timers, photo galleries, and music.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

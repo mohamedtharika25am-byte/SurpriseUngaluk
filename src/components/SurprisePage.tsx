@@ -1,0 +1,616 @@
+import React, { useState, useEffect } from 'react';
+import { motion, AnimatePresence } from 'motion/react';
+import {
+  Gift,
+  Heart,
+  Award,
+  Sparkles,
+  Lock,
+  Unlock,
+  AlertCircle,
+  Share2,
+  Copy,
+  Check,
+  ArrowLeft,
+  Loader2,
+  Volume2,
+  Clock
+} from 'lucide-react';
+import { Surprise, ThemeType } from '../types';
+import CountdownTimer, { calculateTimeRemaining } from './CountdownTimer';
+import PhotoGallery from './PhotoGallery';
+import MusicPlayer from './MusicPlayer';
+import ConfettiEffect from './Confetti';
+
+// Interactive Components
+import { ThemeToggle } from './ThemeToggle';
+import { BeforeAfterSlider } from './BeforeAfterSlider';
+import { TimelineView } from './TimelineView';
+import { MiniQuiz } from './MiniQuiz';
+import { BalloonsGame } from './BalloonsGame';
+import { InsideJokesCards } from './InsideJokesCards';
+import { HiddenMessagesEnvelope } from './HiddenMessagesEnvelope';
+import { CakeCutting } from './CakeCutting';
+import { VoiceNotePlayer } from './VoiceNotePlayer';
+import { ScratchCard } from './ScratchCard';
+
+
+interface SurprisePageProps {
+  id: string;
+  onNavigateHome: () => void;
+}
+
+export const SurprisePage: React.FC<SurprisePageProps> = ({ id, onNavigateHome }) => {
+  const [surprise, setSurprise] = useState<Surprise | null>(null);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  // Unlocking & Timer state
+  const [isUnlocked, setIsUnlocked] = useState<boolean>(false);
+  const [timerHighlighted, setTimerHighlighted] = useState<boolean>(false);
+  const [earlyAlertMessage, setEarlyAlertMessage] = useState<string | null>(null);
+  const [triggerConfetti, setTriggerConfetti] = useState<boolean>(false);
+  const [copiedLink, setCopiedLink] = useState<boolean>(false);
+
+  // Active theme & cake cutting state
+  const [currentTheme, setCurrentTheme] = useState<ThemeType>('midnight');
+  const [cakeCutDone, setCakeCutDone] = useState<boolean>(false);
+
+  useEffect(() => {
+    fetchSurprise();
+  }, [id]);
+
+  const fetchSurprise = async () => {
+    setIsLoading(true);
+    setErrorMsg(null);
+
+    // Helper to process surprise object
+    const applySurprise = (data: Surprise) => {
+      setSurprise(data);
+      if (data.theme_preference) {
+        setCurrentTheme(data.theme_preference);
+      }
+      if (!data.timer_enabled) {
+        setIsUnlocked(true);
+      } else {
+        const timeRem = calculateTimeRemaining(data.occasion_datetime);
+        if (timeRem.isPast) {
+          setIsUnlocked(true);
+        }
+      }
+    };
+
+    try {
+      // 1. Check local storage first
+      try {
+        const localDataStr = localStorage.getItem(`surprise_${id}`) || localStorage.getItem(id);
+        if (localDataStr) {
+          const parsed: Surprise = JSON.parse(localDataStr);
+          if (parsed && parsed.id) {
+            applySurprise(parsed);
+            setIsLoading(false);
+            return;
+          }
+        }
+      } catch (e) {
+        console.warn('Error reading from localStorage:', e);
+      }
+
+      // 2. Demo surprise fallback
+      if (id === 'demo-birthday-surprise' || id === 'demo') {
+        const demoData: Surprise = {
+          id: 'demo-birthday-surprise',
+          recipient_name: 'Sarah',
+          occasion_type: 'birthday',
+          occasion_datetime: new Date(Date.now() + 60 * 1000).toISOString(),
+          sender_name: 'Alex & Friends',
+          message: 'Wishing you the happiest birthday filled with joy, laughter, and unforgettable moments! May this special year bring you everything your heart desires! 🎉🎂✨',
+          photo_urls: [
+            'https://images.unsplash.com/photo-1513151233558-d860c5398176?auto=format&fit=crop&w=800&q=80',
+            'https://images.unsplash.com/photo-1530103862676-de8c9debad1d?auto=format&fit=crop&w=800&q=80',
+            'https://images.unsplash.com/photo-1464349095431-e9a21285b5f3?auto=format&fit=crop&w=800&q=80'
+          ],
+          song_url: 'https://cdn.pixabay.com/download/audio/2022/03/15/audio_c8c8a81617.mp3?filename=happy-birthday-110058.mp3',
+          timer_enabled: true,
+          created_at: new Date().toISOString()
+        };
+        applySurprise(demoData);
+        setIsLoading(false);
+        return;
+      }
+
+      // 3. Server API fetch
+      const res = await fetch(`/api/surprise/${id}`);
+      const contentType = res.headers.get('content-type');
+
+      if (res.ok && contentType && contentType.includes('application/json')) {
+        const data = await res.json();
+        if (data && data.success && data.surprise) {
+          applySurprise(data.surprise);
+          // Cache in local storage for subsequent views
+          try {
+            localStorage.setItem(`surprise_${id}`, JSON.stringify(data.surprise));
+          } catch (e) {}
+          setIsLoading(false);
+          return;
+        }
+      }
+
+      throw new Error('Surprise link not found or invalid.');
+    } catch (err: any) {
+      console.error('Fetch surprise error:', err);
+      setErrorMsg(err.message || 'Could not load surprise details.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleOpenSurpriseClick = () => {
+    if (!surprise) return;
+
+    if (surprise.timer_enabled) {
+      const timeRem = calculateTimeRemaining(surprise.occasion_datetime);
+      if (!timeRem.isPast) {
+        // Now < occasion_datetime logic:
+        // 1) Show exact Tamil message: "இன்னும் சிறிது நேரம் காத்திருங்கள் ⏳"
+        setEarlyAlertMessage('இன்னும் சிறிது நேரம் காத்திருங்கள் ⏳');
+
+        // 2) Focus/highlight timer
+        setTimerHighlighted(true);
+        const timerElement = document.getElementById('countdown-timer-container');
+        if (timerElement) {
+          timerElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+
+        setTimeout(() => setTimerHighlighted(false), 2000);
+        setTimeout(() => setEarlyAlertMessage(null), 4000);
+        return;
+      }
+    }
+
+    // Now >= occasion_datetime or timer disabled -> Reveal!
+    setIsUnlocked(true);
+    setTriggerConfetti(true);
+  };
+
+  const handleCopyLink = () => {
+    navigator.clipboard.writeText(window.location.href);
+    setCopiedLink(true);
+    setTimeout(() => setCopiedLink(false), 2000);
+  };
+
+  const getOccasionIcon = (type: string) => {
+    switch (type) {
+      case 'wedding':
+        return <Award className="w-8 h-8 text-amber-500" />;
+      case 'anniversary':
+        return <Heart className="w-8 h-8 text-rose-500 fill-rose-500/20" />;
+      default:
+        return <Gift className="w-8 h-8 text-purple-500" />;
+    }
+  };
+
+  const getOccasionHeading = (s: Surprise) => {
+    const partner = s.partner_name ? ` & ${s.partner_name}` : '';
+    const nick = s.nickname ? ` (${s.nickname})` : '';
+
+    switch (s.occasion_type) {
+      case 'wedding':
+        return `Happy Wedding ${s.recipient_name}${partner}! 🥂💍`;
+      case 'anniversary':
+        return `Happy Anniversary ${s.recipient_name}${partner}! 💞🌹`;
+      default:
+        return `Happy Birthday ${s.recipient_name}${nick}! 🎂🎉`;
+    }
+  };
+
+  const calculateDaysCounter = (dateStr?: string | null) => {
+    if (!dateStr) return null;
+    const pastDate = new Date(dateStr);
+    if (isNaN(pastDate.getTime())) return null;
+    const diffTime = Math.max(0, Date.now() - pastDate.getTime());
+    const days = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+    const years = (days / 365.25).toFixed(1);
+    return { days, years };
+  };
+
+  if (isLoading) {
+    return (
+      <div className="min-h-[70vh] flex flex-col items-center justify-center p-6 text-center">
+        <Loader2 className="w-10 h-10 text-rose-500 animate-spin mb-4" />
+        <h3 className="text-xl font-bold text-slate-800">Unwrapping surprise package...</h3>
+        <p className="text-xs text-slate-500 mt-1">Fetching custom memories and countdown...</p>
+      </div>
+    );
+  }
+
+  if (errorMsg || !surprise) {
+    return (
+      <div className="min-h-[70vh] flex flex-col items-center justify-center p-6 text-center max-w-md mx-auto">
+        <div className="p-4 bg-rose-100 rounded-full text-rose-600 mb-4">
+          <AlertCircle className="w-8 h-8" />
+        </div>
+        <h3 className="text-2xl font-bold text-slate-900">Surprise Not Found</h3>
+        <p className="text-sm text-slate-600 mt-2">
+          {errorMsg || 'This surprise link might be invalid or has been removed.'}
+        </p>
+        <button
+          onClick={onNavigateHome}
+          className="mt-6 px-6 py-2.5 rounded-xl bg-slate-900 text-white font-semibold text-sm hover:bg-slate-800 transition-colors flex items-center gap-2"
+        >
+          <ArrowLeft className="w-4 h-4" /> Go to Home
+        </button>
+      </div>
+    );
+  }
+
+  const getThemeStyles = (theme: ThemeType) => {
+    switch (theme) {
+      case 'romance':
+        return 'bg-gradient-to-br from-rose-950 via-pink-950 to-purple-950 border-pink-500/30 glow-pink';
+      case 'celestial':
+        return 'bg-gradient-to-br from-slate-950 via-indigo-950 to-amber-950 border-amber-500/30 glow-gold';
+      case 'cyber':
+        return 'bg-gradient-to-br from-cyan-950 via-gray-950 to-fuchsia-950 border-cyan-500/30 glow-violet';
+      case 'midnight':
+      default:
+        return 'bg-gradient-to-br from-slate-950 via-purple-950 to-indigo-950 border-purple-500/30 glow-violet';
+    }
+  };
+
+  return (
+    <div className={`w-full max-w-4xl mx-auto my-6 px-4 py-6 sm:p-8 rounded-3xl border shadow-2xl transition-all duration-500 ${getThemeStyles(currentTheme)}`}>
+      {/* Confetti Effect component */}
+      <ConfettiEffect trigger={triggerConfetti} occasionType={surprise.occasion_type} />
+
+      {/* Top Bar with Home, Theme Toggle & Share button */}
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
+        <button
+          onClick={onNavigateHome}
+          className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full border border-white/20 text-white hover:bg-white/10 text-xs font-medium transition-colors cursor-pointer"
+        >
+          <ArrowLeft className="w-4 h-4" />
+          <span>Create Yours</span>
+        </button>
+
+        <div className="flex items-center gap-2">
+          <ThemeToggle activeTheme={currentTheme} onThemeChange={setCurrentTheme} />
+
+          <button
+            onClick={handleCopyLink}
+            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full border border-white/20 text-white hover:bg-white/10 text-xs font-medium transition-colors cursor-pointer"
+          >
+            {copiedLink ? (
+              <>
+                <Check className="w-4 h-4 text-emerald-400" />
+                <span>Copied!</span>
+              </>
+            ) : (
+              <>
+                <Share2 className="w-4 h-4 text-pink-400" />
+                <span>Share Link</span>
+              </>
+            )}
+          </button>
+        </div>
+      </div>
+
+      {/* Header Banner */}
+      <motion.div
+        initial={{ y: -10, opacity: 0 }}
+        animate={{ y: 0, opacity: 1 }}
+        className="text-center space-y-4 mb-8"
+      >
+        <div className="w-14 h-14 rounded-full bg-white/5 border border-white/10 flex items-center justify-center text-pink-400 mx-auto glow-pink">
+          {getOccasionIcon(surprise.occasion_type)}
+        </div>
+        <h1 className="text-3xl sm:text-6xl font-serif text-white tracking-tight">
+          {getOccasionHeading(surprise)}
+        </h1>
+        <p className="text-sm sm:text-base text-white/60 font-light">
+          A special celebration created with love by{' '}
+          <span className="font-medium text-pink-400 font-serif">
+            {surprise.sender_name}
+          </span>
+        </p>
+      </motion.div>
+
+      {/* Countdown Timer Section */}
+      {surprise.timer_enabled && (
+        <div className="mb-8">
+          <CountdownTimer
+            targetDate={surprise.occasion_datetime}
+            isHighlighted={timerHighlighted}
+            occasionType={surprise.occasion_type}
+            onTimerEnded={() => setIsUnlocked(true)}
+          />
+        </div>
+      )}
+
+      {/* Early Alert Toast ("இன்னும் சிறிது நேரம் காத்திருங்கள் ⏳") */}
+      <AnimatePresence>
+        {earlyAlertMessage && (
+          <motion.div
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10 }}
+            className="mb-6 p-4 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-300 text-center font-semibold text-base sm:text-lg shadow-lg flex items-center justify-center gap-2 animate-bounce glow-gold"
+          >
+            <Clock className="w-5 h-5 text-amber-400 shrink-0" />
+            <span>{earlyAlertMessage}</span>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Locked State "Open Surprise" Button */}
+      {!isUnlocked && (
+        <motion.div
+          initial={{ scale: 0.95, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          className="text-center py-6"
+        >
+          <button
+            onClick={handleOpenSurpriseClick}
+            className="group relative inline-flex items-center gap-3 px-10 py-4 sm:px-14 sm:py-5 rounded-xl bg-gradient-to-r from-pink-600 to-violet-600 hover:from-pink-500 hover:to-violet-500 text-white font-semibold text-lg sm:text-xl shadow-lg shadow-pink-500/25 transition-all hover:scale-[1.02] active:scale-95 cursor-pointer"
+          >
+            <Lock className="w-6 h-6 group-hover:rotate-12 transition-transform" />
+            <span>Open the Surprise</span>
+            <Sparkles className="w-6 h-6 text-amber-300 animate-spin" />
+          </button>
+          <p className="text-xs text-white/40 font-light mt-3">
+            Click to reveal your personal greeting card, photo wall, and music!
+          </p>
+        </motion.div>
+      )}
+
+      {/* Revealed Surprise Content Section */}
+      <AnimatePresence>
+        {isUnlocked && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6 }}
+            className="space-y-8"
+          >
+            {/* Unlocked Badge */}
+            <div className="flex items-center justify-center gap-2 p-3 bg-emerald-500/10 rounded-full border border-emerald-500/30 text-emerald-300 text-xs font-medium uppercase tracking-widest font-mono">
+              <Unlock className="w-4 h-4 text-emerald-400" />
+              <span>Surprise Unlocked! Happy Celebration! 🎉</span>
+            </div>
+
+            {/* Song Player (if song exists) */}
+            {surprise.song_url && (
+              <MusicPlayer songUrl={surprise.song_url} autoPlay={true} />
+            )}
+
+            {/* Occasion Milestone Stats Card (Days Till Birth / Days of Togetherness) */}
+            {(() => {
+              const counter = calculateDaysCounter(surprise.birth_date);
+              if (surprise.occasion_type === 'birthday') {
+                return (
+                  <motion.div
+                    whileHover={{ y: -2 }}
+                    className="glass p-6 sm:p-8 rounded-3xl glow-violet border border-white/10 space-y-4"
+                  >
+                    <div className="flex items-center justify-between border-b border-white/10 pb-3">
+                      <div className="flex items-center gap-2 text-pink-400 text-xs font-semibold uppercase tracking-widest font-mono">
+                        <Sparkles className="w-4 h-4 text-pink-400" />
+                        <span>Journey on Earth Milestone Stats 🌍</span>
+                      </div>
+                      <span className="text-[11px] text-pink-300 font-mono font-semibold">
+                        {surprise.nickname ? `Celebrated as "${surprise.nickname}"` : `Celebrated for ${surprise.recipient_name}`}
+                      </span>
+                    </div>
+
+                    {counter ? (
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-center pt-1">
+                        <div className="p-4 bg-black/40 rounded-2xl border border-white/10">
+                          <div className="text-2xl sm:text-3xl font-serif font-bold text-pink-300">
+                            {counter.days.toLocaleString()}
+                          </div>
+                          <div className="text-[10px] sm:text-[11px] text-white/50 uppercase tracking-wider mt-1 font-mono">
+                            Days Spreading Joy
+                          </div>
+                        </div>
+                        <div className="p-4 bg-black/40 rounded-2xl border border-white/10">
+                          <div className="text-2xl sm:text-3xl font-serif font-bold text-amber-300">
+                            ~{counter.years}
+                          </div>
+                          <div className="text-[10px] sm:text-[11px] text-white/50 uppercase tracking-wider mt-1 font-mono">
+                            Years on Earth
+                          </div>
+                        </div>
+                        <div className="p-4 bg-black/40 rounded-2xl border border-white/10">
+                          <div className="text-2xl sm:text-3xl font-serif font-bold text-violet-300">
+                            {(counter.days * 24).toLocaleString()}
+                          </div>
+                          <div className="text-[10px] sm:text-[11px] text-white/50 uppercase tracking-wider mt-1 font-mono">
+                            Hours of Smiles
+                          </div>
+                        </div>
+                        <div className="p-4 bg-black/40 rounded-2xl border border-white/10">
+                          <div className="text-2xl sm:text-3xl font-serif font-bold text-emerald-300">
+                            {counter.days.toLocaleString()}
+                          </div>
+                          <div className="text-[10px] sm:text-[11px] text-white/50 uppercase tracking-wider mt-1 font-mono">
+                            Earth Rotations
+                          </div>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="p-4 bg-black/30 rounded-2xl text-center text-xs text-white/70 font-mono">
+                        🎂 Celebrating {surprise.recipient_name} {surprise.nickname ? `("${surprise.nickname}")` : ''}'s special birthday journey! ✨
+                      </div>
+                    )}
+                  </motion.div>
+                );
+              } else {
+                return (
+                  <motion.div
+                    whileHover={{ y: -2 }}
+                    className="glass p-6 sm:p-8 rounded-3xl glow-pink border border-white/10 space-y-4"
+                  >
+                    <div className="flex items-center justify-between border-b border-white/10 pb-3">
+                      <div className="flex items-center gap-2 text-pink-400 text-xs font-semibold uppercase tracking-widest font-mono">
+                        <Heart className="w-4 h-4 text-rose-400 fill-rose-400" />
+                        <span>Love & Togetherness Milestones 💕</span>
+                      </div>
+                      <span className="text-[11px] text-pink-300 font-mono font-semibold">
+                        {surprise.recipient_name} {surprise.partner_name ? `& ${surprise.partner_name}` : ''}
+                      </span>
+                    </div>
+
+                    {counter ? (
+                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 text-center pt-1">
+                        <div className="p-4 bg-black/40 rounded-2xl border border-white/10">
+                          <div className="text-2xl sm:text-3xl font-serif font-bold text-pink-300">
+                            {counter.days.toLocaleString()}
+                          </div>
+                          <div className="text-[10px] sm:text-[11px] text-white/50 uppercase tracking-wider mt-1 font-mono">
+                            Days of Togetherness
+                          </div>
+                        </div>
+                        <div className="p-4 bg-black/40 rounded-2xl border border-white/10">
+                          <div className="text-2xl sm:text-3xl font-serif font-bold text-amber-300">
+                            ~{counter.years}
+                          </div>
+                          <div className="text-[10px] sm:text-[11px] text-white/50 uppercase tracking-wider mt-1 font-mono">
+                            Years of Boundless Love
+                          </div>
+                        </div>
+                        <div className="p-4 bg-black/40 rounded-2xl border border-white/10 col-span-2 sm:col-span-1">
+                          <div className="text-2xl sm:text-3xl font-serif font-bold text-violet-300">
+                            {(counter.days * 24).toLocaleString()}
+                          </div>
+                          <div className="text-[10px] sm:text-[11px] text-white/50 uppercase tracking-wider mt-1 font-mono">
+                            Hours of Shared Joy
+                          </div>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="p-4 bg-black/30 rounded-2xl text-center text-xs text-white/70 font-mono">
+                        🥂 Toasting to the beautiful marriage & journey of {surprise.recipient_name} {surprise.partner_name ? `& ${surprise.partner_name}` : ''}! 💍
+                      </div>
+                    )}
+                  </motion.div>
+                );
+              }
+            })()}
+
+            {/* Message Card */}
+            <motion.div
+              whileHover={{ y: -2 }}
+              className="glass p-8 sm:p-12 rounded-3xl glow-pink border border-white/10 space-y-6 relative overflow-hidden"
+            >
+              <div className="flex items-center gap-2 text-pink-400 text-xs font-semibold uppercase tracking-widest">
+                <Heart className="w-4 h-4 text-pink-400 fill-pink-400" />
+                <span>Heartfelt Message</span>
+              </div>
+
+              <blockquote className="text-xl sm:text-3xl font-serif italic leading-relaxed text-white">
+                "{surprise.message}"
+              </blockquote>
+
+              <div className="pt-4 border-t border-white/10 flex items-center justify-between">
+                <div className="text-xs text-white/40 font-mono">
+                  Created with love ❤️
+                </div>
+                <div className="text-base sm:text-lg font-serif font-bold text-amber-300">
+                  — {surprise.sender_name}
+                </div>
+              </div>
+            </motion.div>
+
+            {/* Cake Cutting First Ceremony (if enabled) */}
+            {surprise.cake_cutting_enabled !== false && !cakeCutDone && (
+              <CakeCutting
+                recipientName={surprise.recipient_name}
+                occasionType={surprise.occasion_type}
+                onComplete={() => setCakeCutDone(true)}
+              />
+            )}
+
+            {/* Voice Note Message (if attached) */}
+            {surprise.voice_note_url && (
+              <VoiceNotePlayer
+                voiceNoteUrl={surprise.voice_note_url}
+                senderName={surprise.sender_name}
+              />
+            )}
+
+            {/* Photo Gallery (if photos exist) */}
+            {surprise.photo_urls && surprise.photo_urls.length > 0 && (
+              <PhotoGallery
+                photos={surprise.photo_urls}
+                recipientName={surprise.recipient_name}
+              />
+            )}
+
+            {/* Before & After Photo Comparison Slider */}
+            {surprise.before_after && (
+              <BeforeAfterSlider data={surprise.before_after} />
+            )}
+
+            {/* Interactive Timeline of Memories */}
+            {surprise.timeline_events && surprise.timeline_events.length > 0 && (
+              <TimelineView events={surprise.timeline_events} />
+            )}
+
+            {/* Interactive Pop The Balloons Mini Game */}
+            {surprise.balloons_game_enabled !== false && (
+              <BalloonsGame
+                recipientName={surprise.recipient_name}
+                balloonMessages={surprise.balloon_messages}
+              />
+            )}
+
+            {/* Interactive Scratch Card Vouchers */}
+            {surprise.scratch_cards && surprise.scratch_cards.length > 0 && (
+              <ScratchCard
+                cards={surprise.scratch_cards}
+                recipientName={surprise.recipient_name}
+              />
+            )}
+
+            {/* Interactive Mini Quiz */}
+            {surprise.quiz_questions && surprise.quiz_questions.length > 0 && (
+              <MiniQuiz questions={surprise.quiz_questions} recipientName={surprise.recipient_name} />
+            )}
+
+            {/* Inside Jokes & Memes Flip Cards */}
+            {surprise.inside_jokes && surprise.inside_jokes.length > 0 && (
+              <InsideJokesCards jokes={surprise.inside_jokes} />
+            )}
+
+            {/* Secret Sealed Envelopes & Hidden Messages */}
+            {surprise.hidden_messages && surprise.hidden_messages.length > 0 && (
+              <HiddenMessagesEnvelope messages={surprise.hidden_messages} senderName={surprise.sender_name} />
+            )}
+
+
+            {/* Bottom Celebration Footer */}
+            <div className="glass p-8 rounded-3xl glow-gold text-white text-center space-y-4 border border-white/10">
+              <div className="w-12 h-12 rounded-full bg-white/5 border border-white/10 flex items-center justify-center text-amber-300 mx-auto">
+                <Sparkles className="w-6 h-6 animate-pulse" />
+              </div>
+              <h3 className="text-xl font-serif text-white">
+                Want to create a surprise for someone you love?
+              </h3>
+              <p className="text-xs text-white/50 font-light max-w-md mx-auto">
+                Create your own personalized celebration link with live reveal countdowns, custom music, and photo walls!
+              </p>
+              <button
+                onClick={onNavigateHome}
+                className="px-6 py-3 rounded-full bg-gradient-to-r from-pink-600 to-violet-600 hover:from-pink-500 hover:to-violet-500 text-white font-semibold text-xs sm:text-sm shadow-lg shadow-pink-500/20 transition-all cursor-pointer"
+              >
+                Create New Surprise Now
+              </button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+};
+
+export default SurprisePage;
