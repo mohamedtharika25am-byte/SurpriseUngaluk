@@ -81,6 +81,7 @@ export const SurpriseForm: React.FC<SurpriseFormProps> = ({
   };
 
   const [occasionDatetime, setOccasionDatetime] = useState(getDefaultDatetime());
+  const [activePreset, setActivePreset] = useState<'1min' | '5min' | 'instant' | null>('5min');
   const [senderName, setSenderName] = useState('');
   const [message, setMessage] = useState('');
   const [timerEnabled, setTimerEnabled] = useState(true);
@@ -259,7 +260,8 @@ export const SurpriseForm: React.FC<SurpriseFormProps> = ({
   };
 
   // Quick preset timers
-  const handleQuickTimerPreset = (minutesToAdd: number) => {
+  const handleQuickTimerPreset = (minutesToAdd: number, presetKey: '1min' | '5min' | 'instant') => {
+    setActivePreset(presetKey);
     const target = new Date();
     target.setMinutes(target.getMinutes() + minutesToAdd);
     const tzoffset = target.getTimezoneOffset() * 60000;
@@ -803,7 +805,10 @@ export const SurpriseForm: React.FC<SurpriseFormProps> = ({
                 type="datetime-local"
                 required
                 value={occasionDatetime}
-                onChange={(e) => setOccasionDatetime(e.target.value)}
+                onChange={(e) => {
+                  setOccasionDatetime(e.target.value);
+                  setActivePreset(null);
+                }}
                 className="w-full px-4 py-3 rounded-xl glass-input text-sm font-medium focus:outline-none transition-all"
               />
             </div>
@@ -813,22 +818,34 @@ export const SurpriseForm: React.FC<SurpriseFormProps> = ({
               <span className="text-[11px] font-medium text-white/40">Quick Presets:</span>
               <button
                 type="button"
-                onClick={() => handleQuickTimerPreset(1)}
-                className="px-3 py-1 rounded-full border border-white/15 bg-white/5 hover:bg-white/10 text-white/80 text-[11px] font-medium transition-colors"
+                onClick={() => handleQuickTimerPreset(1, '1min')}
+                className={`px-3 py-1 rounded-full border text-[11px] font-medium transition-all ${
+                  activePreset === '1min'
+                    ? 'border-pink-500/60 bg-pink-500/25 text-pink-300 shadow-md shadow-pink-500/10'
+                    : 'border-white/15 bg-white/5 hover:bg-white/10 text-white/80'
+                }`}
               >
                 In 1 Min
               </button>
               <button
                 type="button"
-                onClick={() => handleQuickTimerPreset(5)}
-                className="px-3 py-1 rounded-full border border-white/15 bg-white/5 hover:bg-white/10 text-white/80 text-[11px] font-medium transition-colors"
+                onClick={() => handleQuickTimerPreset(5, '5min')}
+                className={`px-3 py-1 rounded-full border text-[11px] font-medium transition-all ${
+                  activePreset === '5min'
+                    ? 'border-pink-500/60 bg-pink-500/25 text-pink-300 shadow-md shadow-pink-500/10'
+                    : 'border-white/15 bg-white/5 hover:bg-white/10 text-white/80'
+                }`}
               >
                 In 5 Mins
               </button>
               <button
                 type="button"
-                onClick={() => handleQuickTimerPreset(0)}
-                className="px-3 py-1 rounded-full border border-pink-500/40 bg-pink-500/20 text-pink-300 text-[11px] font-semibold transition-colors"
+                onClick={() => handleQuickTimerPreset(0, 'instant')}
+                className={`px-3 py-1 rounded-full border text-[11px] font-semibold transition-all ${
+                  activePreset === 'instant'
+                    ? 'border-pink-500/60 bg-pink-500/25 text-pink-300 shadow-md shadow-pink-500/10'
+                    : 'border-white/15 bg-white/5 hover:bg-white/10 text-white/80'
+                }`}
               >
                 Right Now (Instant Unlock)
               </button>
