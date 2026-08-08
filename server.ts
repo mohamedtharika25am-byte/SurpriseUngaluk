@@ -9,8 +9,10 @@ import { randomUUID } from 'crypto';
 
 dotenv.config();
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+const currentFilename = typeof __filename !== 'undefined' ? __filename : '';
+const currentDirname = currentFilename ? path.dirname(currentFilename) : process.cwd();
+
+
 
 const app = express();
 const PORT = 3000;
@@ -494,4 +496,9 @@ async function startServer() {
   });
 }
 
-startServer();
+export default app;
+
+if (process.env.VERCEL !== '1' && !process.env.NOW_REGION) {
+  startServer();
+}
+

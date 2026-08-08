@@ -17,6 +17,9 @@ import {
   Clock
 } from 'lucide-react';
 import { Surprise, ThemeType } from '../types';
+import { decodeSurpriseFromHash } from '../lib/urlHashHelper';
+import { supabase } from '../lib/supabase';
+
 import CountdownTimer, { calculateTimeRemaining } from './CountdownTimer';
 import PhotoGallery from './PhotoGallery';
 import MusicPlayer from './MusicPlayer';
@@ -81,7 +84,20 @@ export const SurprisePage: React.FC<SurprisePageProps> = ({ id, onNavigateHome }
     };
 
     try {
-      // 1. Check local storage first
+      // 0. Check URL hash first (instant fallback)
+      if (window.location.hash) {
+        const hashSurprise = decodeSurpriseFromHash(window.location.hash);
+        if (hashSurprise) {
+          applySurprise(hashSurprise);
+          try {
+            localStorage.setItem(`surprise_${id}`, JSON.stringify(hashSurprise));
+          } catch (e) {}
+          setIsLoading(false);
+          return;
+        }
+      }
+
+      // 1. Check local storage
       try {
         const localDataStr = localStorage.getItem(`surprise_${id}`) || localStorage.getItem(id);
         if (localDataStr) {
@@ -120,19 +136,44 @@ export const SurprisePage: React.FC<SurprisePageProps> = ({ id, onNavigateHome }
       }
 
       // 3. Server API fetch
-      const res = await fetch(`/api/surprise/${id}`);
-      const contentType = res.headers.get('content-type');
+      try {
+        const res = await fetch(`/api/surprise/${id}`);
+        const contentType = res.headers.get('content-type');
 
-      if (res.ok && contentType && contentType.includes('application/json')) {
-        const data = await res.json();
-        if (data && data.success && data.surprise) {
-          applySurprise(data.surprise);
-          // Cache in local storage for subsequent views
-          try {
-            localStorage.setItem(`surprise_${id}`, JSON.stringify(data.surprise));
-          } catch (e) {}
-          setIsLoading(false);
-          return;
+        if (res.ok && contentType && contentType.includes('application/json')) {
+          const data = await res.json();
+          if (data && data.success && data.surprise) {
+            applySurprise(data.surprise);
+            try {
+              localStorage.setItem(`surprise_${id}`, JSON.stringify(data.surprise));
+            } catch (e) {}
+            setIsLoading(false);
+            return;
+          }
+        }
+      } catch (apiErr) {
+        console.warn('API fetch attempt failed, trying Supabase fallback:', apiErr);
+      }
+
+      // 4. Client-side Supabase fetch (if API call fails/unavailable)
+      if (supabase) {
+        try {
+          const { data: supaData, error: supaErr } = await supabase
+            .from('surprises')
+            .select('*')
+            .eq('id', id)
+            .single();
+
+          if (supaData && !supaErr) {
+            applySurprise(supaData);
+            try {
+              localStorage.setItem(`surprise_${id}`, JSON.stringify(supaData));
+            } catch (e) {}
+            setIsLoading(false);
+            return;
+          }
+        } catch (supaException) {
+          console.warn('Supabase client fetch exception:', supaException);
         }
       }
 

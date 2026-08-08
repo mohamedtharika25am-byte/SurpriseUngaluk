@@ -32,6 +32,8 @@ import {
   InsideJoke,
   ScratchCardItem
 } from '../types';
+import { encodeSurpriseToHash } from '../lib/urlHashHelper';
+
 
 interface SurpriseFormProps {
   initialOccasion?: OccasionType;
@@ -516,7 +518,11 @@ export const SurpriseForm: React.FC<SurpriseFormProps> = ({
         }
       }
 
-      const fullShareableUrl = `${window.location.origin}/surprise/${finalId}`;
+      let fullShareableUrl = `${window.location.origin}/surprise/${finalId}`;
+      const hashData = encodeSurpriseToHash(fallbackRecord);
+      if (hashData && hashData.length < 4000) {
+        fullShareableUrl += `#s=${encodeURIComponent(hashData)}`;
+      }
       setCreatedResult({ id: finalId, link: fullShareableUrl });
       onCreated(finalId, fullShareableUrl);
     } catch (err: any) {
