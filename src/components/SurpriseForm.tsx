@@ -484,9 +484,24 @@ export const SurpriseForm: React.FC<SurpriseFormProps> = ({
       // 1. Direct Supabase insert from client if configured (fastest & most reliable)
       if (supabase) {
         try {
+          // Standard DB schema record matching public.surprises columns exactly
+          const dbStandardRecord: any = {
+            recipient_name: recipientName.trim(),
+            occasion_type: occasionType,
+            occasion_datetime: isoDatetime,
+            sender_name: senderName.trim(),
+            message: message.trim(),
+            photo_urls: photoDataUrls.length > 0 ? photoDataUrls.slice(0, 3) : [],
+            song_url: finalSongUrl,
+            timer_enabled: timerEnabled,
+            birth_date: birthDate.trim() || null,
+            partner_name: partnerName.trim() || null,
+            nickname: nickname.trim() || null
+          };
+
           const { data: supaInsertData, error: supaErr } = await supabase
             .from('surprises')
-            .insert([fallbackRecord])
+            .insert([dbStandardRecord])
             .select()
             .single();
 
@@ -494,7 +509,7 @@ export const SurpriseForm: React.FC<SurpriseFormProps> = ({
             finalId = supaInsertData.id || localId;
             isSavedToCloud = true;
             try {
-              localStorage.setItem(`surprise_${finalId}`, JSON.stringify(supaInsertData));
+              localStorage.setItem(`surprise_${finalId}`, JSON.stringify({ ...fallbackRecord, id: finalId }));
             } catch (e) {}
           } else {
             console.warn('Client Supabase insert warning:', supaErr);

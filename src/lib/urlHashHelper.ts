@@ -1,6 +1,6 @@
 import { Surprise } from '../types';
 
-// Bulletproof UTF-8 to Base64 encoder for browser environments (supports emojis, Tamil, Unicode)
+// Bulletproof UTF-8 to Base64 encoder (supports emojis, Tamil, Unicode)
 function utf8ToBase64(str: string): string {
   try {
     if (typeof TextEncoder !== 'undefined') {
@@ -15,7 +15,6 @@ function utf8ToBase64(str: string): string {
     console.warn('TextEncoder base64 fallback:', e);
   }
 
-  // Fallback for environments without TextEncoder
   return btoa(
     encodeURIComponent(str).replace(/%([0-9A-F]{2})/g, (_match, p1) =>
       String.fromCharCode(parseInt(p1, 16))
@@ -35,7 +34,6 @@ function base64ToUtf8(str: string): string {
     console.warn('TextDecoder base64 fallback:', e);
   }
 
-  // Fallback for environments without TextDecoder
   return decodeURIComponent(
     Array.prototype.map
       .call(atob(str), (c: string) => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
@@ -45,34 +43,21 @@ function base64ToUtf8(str: string): string {
 
 export function encodeSurpriseToHash(surprise: Surprise): string {
   try {
-    const sampleUnsplash = [
-      'https://images.unsplash.com/photo-1513151233558-d860c5398176?auto=format&fit=crop&w=800&q=80',
-      'https://images.unsplash.com/photo-1530103862676-de8c9debad1d?auto=format&fit=crop&w=800&q=80',
-      'https://images.unsplash.com/photo-1464349095431-e9a21285b5f3?auto=format&fit=crop&w=800&q=80'
-    ];
-
-    // Sanitize heavy base64 data URLs to sample Unsplash URLs for compact hash representation
-    const sanitized: Surprise = {
-      ...surprise,
-      photo_urls: (surprise.photo_urls || []).map((url, i) =>
-        !url || url.startsWith('data:') ? sampleUnsplash[i % sampleUnsplash.length] : url
-      ),
-      song_url: surprise.song_url && surprise.song_url.startsWith('data:') ? null : surprise.song_url,
-      voice_note_url: surprise.voice_note_url && surprise.voice_note_url.startsWith('data:') ? null : surprise.voice_note_url,
-      before_after: surprise.before_after
-        ? {
-            ...surprise.before_after,
-            beforeUrl: surprise.before_after.beforeUrl && surprise.before_after.beforeUrl.startsWith('data:')
-              ? sampleUnsplash[0]
-              : surprise.before_after.beforeUrl,
-            afterUrl: surprise.before_after.afterUrl && surprise.before_after.afterUrl.startsWith('data:')
-              ? sampleUnsplash[1]
-              : surprise.before_after.afterUrl
-          }
-        : null
+    // Ultra-compact minified representation (~150 chars total) for WhatsApp compatibility
+    const minified = {
+      r: surprise.recipient_name,
+      o: surprise.occasion_type,
+      d: surprise.occasion_datetime,
+      s: surprise.sender_name,
+      m: surprise.message,
+      b: surprise.birth_date || undefined,
+      p: surprise.partner_name || undefined,
+      n: surprise.nickname || undefined,
+      t: surprise.theme_preference || undefined,
+      x: surprise.timer_enabled ? 1 : 0
     };
 
-    const jsonStr = JSON.stringify(sanitized);
+    const jsonStr = JSON.stringify(minified);
     return utf8ToBase64(jsonStr);
   } catch (e) {
     console.error('Failed to encode surprise to hash:', e);
@@ -93,8 +78,37 @@ export function decodeSurpriseFromHash(hashStr: string): Surprise | null {
     cleanHash = decodeURIComponent(cleanHash);
     const jsonStr = base64ToUtf8(cleanHash);
     const parsed = JSON.parse(jsonStr);
-    if (parsed && parsed.id && parsed.recipient_name) {
-      return parsed as Surprise;
+
+    if (parsed) {
+      // Minified compact format handling
+      if (parsed.r) {
+        return {
+          id: parsed.i || 's_' + Date.now(),
+          recipient_name: parsed.r,
+          occasion_type: parsed.o || 'birthday',
+          occasion_datetime: parsed.d || new Date().toISOString(),
+          sender_name: parsed.s || 'Friend',
+          message: parsed.m || '',
+          photo_urls: [
+            'https://images.unsplash.com/photo-1513151233558-d860c5398176?auto=format&fit=crop&w=800&q=80',
+            'https://images.unsplash.com/photo-1530103862676-de8c9debad1d?auto=format&fit=crop&w=800&q=80'
+          ],
+          song_url: 'https://cdn.pixabay.com/download/audio/2022/03/15/audio_c8c8a81617.mp3?filename=happy-birthday-110058.mp3',
+          timer_enabled: parsed.x !== 0,
+          created_at: new Date().toISOString(),
+          birth_date: parsed.b || null,
+          partner_name: parsed.p || null,
+          nickname: parsed.n || null,
+          theme_preference: parsed.t || 'midnight',
+          cake_cutting_enabled: true,
+          balloons_game_enabled: true
+        } as Surprise;
+      }
+
+      // Legacy full format handling
+      if (parsed.id && parsed.recipient_name) {
+        return parsed as Surprise;
+      }
     }
   } catch (e) {
     console.warn('Failed to decode surprise from hash:', e);
