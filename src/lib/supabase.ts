@@ -1,28 +1,27 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
-// Safely obtain environment variables from Vite or Node env
-const getEnvVar = (key: string): string => {
-  const meta = import.meta as any;
-  if (typeof meta !== 'undefined' && meta.env && meta.env[key]) {
-    return meta.env[key];
-  }
-  if (typeof process !== 'undefined' && process.env && process.env[key]) {
-    return process.env[key] as string;
-  }
-  return '';
-};
+// Access env vars directly so Vite static bundler replaces them at build time
+const metaEnv = (typeof import.meta !== 'undefined' ? (import.meta as any).env : {}) || {};
+const procEnv = (typeof process !== 'undefined' ? process.env : {}) || {};
 
-export const supabaseUrl =
-  getEnvVar('VITE_SUPABASE_URL') ||
-  getEnvVar('NEXT_PUBLIC_SUPABASE_URL') ||
-  getEnvVar('SUPABASE_URL') ||
+const rawUrl =
+  (metaEnv.VITE_SUPABASE_URL as string) ||
+  (metaEnv.NEXT_PUBLIC_SUPABASE_URL as string) ||
+  (procEnv.VITE_SUPABASE_URL as string) ||
+  (procEnv.SUPABASE_URL as string) ||
+  (procEnv.NEXT_PUBLIC_SUPABASE_URL as string) ||
   '';
 
-export const supabaseAnonKey =
-  getEnvVar('VITE_SUPABASE_ANON_KEY') ||
-  getEnvVar('NEXT_PUBLIC_SUPABASE_ANON_KEY') ||
-  getEnvVar('SUPABASE_ANON_KEY') ||
+const rawKey =
+  (metaEnv.VITE_SUPABASE_ANON_KEY as string) ||
+  (metaEnv.NEXT_PUBLIC_SUPABASE_ANON_KEY as string) ||
+  (procEnv.VITE_SUPABASE_ANON_KEY as string) ||
+  (procEnv.SUPABASE_ANON_KEY as string) ||
+  (procEnv.NEXT_PUBLIC_SUPABASE_ANON_KEY as string) ||
   '';
+
+export const supabaseUrl = rawUrl.trim();
+export const supabaseAnonKey = rawKey.trim();
 
 export const isSupabaseConfigured = (): boolean => {
   return (
@@ -33,7 +32,6 @@ export const isSupabaseConfigured = (): boolean => {
   );
 };
 
-// Create client if configured, otherwise create dummy or conditional client
 export const supabase: SupabaseClient | null = isSupabaseConfigured()
   ? createClient(supabaseUrl, supabaseAnonKey)
   : null;
