@@ -522,7 +522,7 @@ export const SurpriseForm: React.FC<SurpriseFormProps> = ({
 
       let fullShareableUrl = `${window.location.origin}/surprise/${finalId}`;
       const hashData = encodeSurpriseToHash(fallbackRecord);
-      if (hashData && hashData.length < 4000) {
+      if (hashData) {
         fullShareableUrl += `#s=${encodeURIComponent(hashData)}`;
       }
       setCreatedResult({ id: finalId, link: fullShareableUrl });
