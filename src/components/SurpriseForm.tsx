@@ -33,6 +33,8 @@ import {
   ScratchCardItem
 } from '../types';
 import { encodeSurpriseToHash } from '../lib/urlHashHelper';
+import { supabase } from '../lib/supabase';
+
 
 
 interface SurpriseFormProps {
@@ -477,58 +479,72 @@ export const SurpriseForm: React.FC<SurpriseFormProps> = ({
       };
 
       let finalId = localId;
+      let isSavedToCloud = false;
 
-      try {
-        const res = await fetch('/api/create-surprise', {
-          method: 'POST',
-          body: formData
-        });
-
-        const contentType = res.headers.get('content-type');
-        if (res.ok && contentType && contentType.includes('application/json')) {
-          const data: ApiCreateSurpriseResponse = await res.json();
-          if (data.success && data.id) {
-            finalId = data.id;
-            const recordToSave = data.surprise || { ...fallbackRecord, id: finalId };
-            try {
-              localStorage.setItem(`surprise_${finalId}`, JSON.stringify(recordToSave));
-            } catch (e) {
-              console.warn('LocalStorage quota exceeded or unavailable', e);
-            }
-          } else {
-            // Save fallback locally
-            try {
-              localStorage.setItem(`surprise_${localId}`, JSON.stringify(fallbackRecord));
-            } catch (e) {
-              console.warn('LocalStorage quota exceeded', e);
-            }
-          }
-        } else {
-          // Server returned HTML or error status, use local storage fallback
-          try {
-            localStorage.setItem(`surprise_${localId}`, JSON.stringify(fallbackRecord));
-          } catch (e) {
-            console.warn('LocalStorage quota exceeded', e);
-          }
-        }
-      } catch (fetchErr) {
-        console.warn('API fetch failed, saving surprise to local storage fallback:', fetchErr);
+      // 1. Direct Supabase insert from client if configured (fastest & most reliable)
+      if (supabase) {
         try {
-          localStorage.setItem(`surprise_${localId}`, JSON.stringify(fallbackRecord));
-        } catch (e) {
-          console.warn('LocalStorage quota exceeded', e);
+          const { data: supaInsertData, error: supaErr } = await supabase
+            .from('surprises')
+            .insert([fallbackRecord])
+            .select()
+            .single();
+
+          if (supaInsertData && !supaErr) {
+            finalId = supaInsertData.id || localId;
+            isSavedToCloud = true;
+            try {
+              localStorage.setItem(`surprise_${finalId}`, JSON.stringify(supaInsertData));
+            } catch (e) {}
+          } else {
+            console.warn('Client Supabase insert warning:', supaErr);
+          }
+        } catch (supaEx) {
+          console.warn('Client Supabase insert exception:', supaEx);
         }
       }
 
+      // 2. Server API fallback if not saved via client Supabase
+      if (!isSavedToCloud) {
+        try {
+          const res = await fetch('/api/create-surprise', {
+            method: 'POST',
+            body: formData
+          });
+
+          const contentType = res.headers.get('content-type');
+          if (res.ok && contentType && contentType.includes('application/json')) {
+            const data: ApiCreateSurpriseResponse = await res.json();
+            if (data.success && data.id) {
+              finalId = data.id;
+              if (data.storageMode === 'supabase') {
+                isSavedToCloud = true;
+              }
+              const recordToSave = data.surprise || { ...fallbackRecord, id: finalId };
+              try {
+                localStorage.setItem(`surprise_${finalId}`, JSON.stringify(recordToSave));
+              } catch (e) {}
+            }
+          }
+        } catch (fetchErr) {
+          console.warn('API fetch failed:', fetchErr);
+        }
+      }
+
+      // Save fallback in local storage if not already cached
+      try {
+        localStorage.setItem(`surprise_${localId}`, JSON.stringify(fallbackRecord));
+      } catch (e) {}
+
+      // 3. Construct URL - ONLY append #s= hash if NOT saved to cloud database
       let fullShareableUrl = `${window.location.origin}/surprise/${finalId}`;
-      
-      // Only append #s= hash payload if running in local fallback mode (without database)
-      if (finalId === localId) {
+      if (!isSavedToCloud) {
         const hashData = encodeSurpriseToHash(fallbackRecord);
         if (hashData) {
           fullShareableUrl += `#s=${encodeURIComponent(hashData)}`;
         }
       }
+
       setCreatedResult({ id: finalId, link: fullShareableUrl });
       onCreated(finalId, fullShareableUrl);
     } catch (err: any) {
