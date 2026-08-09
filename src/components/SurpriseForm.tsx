@@ -521,9 +521,13 @@ export const SurpriseForm: React.FC<SurpriseFormProps> = ({
       }
 
       let fullShareableUrl = `${window.location.origin}/surprise/${finalId}`;
-      const hashData = encodeSurpriseToHash(fallbackRecord);
-      if (hashData) {
-        fullShareableUrl += `#s=${encodeURIComponent(hashData)}`;
+      
+      // Only append #s= hash payload if running in local fallback mode (without database)
+      if (finalId === localId) {
+        const hashData = encodeSurpriseToHash(fallbackRecord);
+        if (hashData) {
+          fullShareableUrl += `#s=${encodeURIComponent(hashData)}`;
+        }
       }
       setCreatedResult({ id: finalId, link: fullShareableUrl });
       onCreated(finalId, fullShareableUrl);
