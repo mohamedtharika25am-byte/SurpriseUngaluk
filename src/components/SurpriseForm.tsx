@@ -549,18 +549,21 @@ export const SurpriseForm: React.FC<SurpriseFormProps> = ({
       let finalId = localId;
       let isSavedToCloud = false;
 
-      // 1. Direct Supabase insert from client with 1.5s fast timeout
+      // 1. Direct Supabase insert from client with clean lightweight payload (<2KB)
       if (supabase) {
         try {
-          // Standard DB schema record matching public.surprises columns exactly
+          // Exclude giant base64 data strings from direct DB column insert for 10x faster execution
+          const cleanPhotoUrls = photoDataUrls.filter((u) => u && !u.startsWith('data:'));
+          const cleanSongUrl = (finalSongUrl && !finalSongUrl.startsWith('data:')) ? finalSongUrl : (spotifyUrl.trim() || null);
+          
           const dbStandardRecord: any = {
             recipient_name: recipientName.trim(),
             occasion_type: occasionType,
             occasion_datetime: isoDatetime,
             sender_name: senderName.trim(),
             message: message.trim(),
-            photo_urls: photoDataUrls.length > 0 ? photoDataUrls.slice(0, 3) : [],
-            song_url: finalSongUrl,
+            photo_urls: cleanPhotoUrls,
+            song_url: cleanSongUrl,
             timer_enabled: timerEnabled,
             birth_date: birthDate.trim() || null,
             partner_name: partnerName.trim() || null,
@@ -569,7 +572,7 @@ export const SurpriseForm: React.FC<SurpriseFormProps> = ({
 
           const supaPromise = supabase.from('surprises').insert([dbStandardRecord]).select().single();
           const timeoutPromise = new Promise<{ data: any; error: any }>((resolve) =>
-            setTimeout(() => resolve({ data: null, error: new Error('Supabase timeout') }), 1500)
+            setTimeout(() => resolve({ data: null, error: new Error('Supabase timeout') }), 3500)
           );
 
           const { data: supaInsertData, error: supaErr } = await Promise.race([supaPromise, timeoutPromise]);
@@ -588,11 +591,11 @@ export const SurpriseForm: React.FC<SurpriseFormProps> = ({
         }
       }
 
-      // 2. Server API fallback with 1s fast timeout if not saved via client Supabase
+      // 2. Server API fallback if not saved via client Supabase
       if (!isSavedToCloud) {
         try {
           const controller = new AbortController();
-          const timeoutId = setTimeout(() => controller.abort(), 1000);
+          const timeoutId = setTimeout(() => controller.abort(), 2000);
 
           const res = await fetch('/api/create-surprise', {
             method: 'POST',
@@ -620,7 +623,7 @@ export const SurpriseForm: React.FC<SurpriseFormProps> = ({
         }
       }
 
-      // Cache record with uploaded photos in localStorage under finalId and localId
+      // Cache record in localStorage under finalId and localId
       try {
         const fullRecordToCache = { ...fallbackRecord, id: finalId };
         localStorage.setItem(`surprise_${finalId}`, JSON.stringify(fullRecordToCache));
@@ -629,11 +632,11 @@ export const SurpriseForm: React.FC<SurpriseFormProps> = ({
         console.warn('LocalStorage quota exceeded or unavailable', e);
       }
 
-      // 3. Construct URL - keep URL ultra-clean and short (< 50 chars max for WhatsApp & QR)
+      // 3. Construct URL - Clean short URL if saved to cloud, or compact self-contained hash fallback
       let fullShareableUrl = `${window.location.origin}/surprise/${finalId}`;
       if (!isSavedToCloud) {
         const hashData = encodeSurpriseToHash(fallbackRecord);
-        if (hashData && hashData.length < 250) {
+        if (hashData) {
           fullShareableUrl += `#s=${encodeURIComponent(hashData)}`;
         }
       }
