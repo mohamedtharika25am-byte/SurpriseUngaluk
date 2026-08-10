@@ -236,7 +236,7 @@ export const SurpriseForm: React.FC<SurpriseFormProps> = ({
   };
 
   // Fast client-side image compression helper
-  const compressPhotoFile = (file: File, maxWidth = 1200, quality = 0.75): Promise<string> => {
+  const compressPhotoFile = (file: File, maxWidth = 800, quality = 0.65): Promise<string> => {
     return new Promise((resolve) => {
       if (file.size < 150 * 1024) {
         const reader = new FileReader();
@@ -549,7 +549,7 @@ export const SurpriseForm: React.FC<SurpriseFormProps> = ({
       let finalId = localId;
       let isSavedToCloud = false;
 
-      // 1. Direct Supabase insert from client if configured (fastest & most reliable)
+      // 1. Direct Supabase insert from client with 1.5s fast timeout
       if (supabase) {
         try {
           // Standard DB schema record matching public.surprises columns exactly
@@ -567,11 +567,12 @@ export const SurpriseForm: React.FC<SurpriseFormProps> = ({
             nickname: nickname.trim() || null
           };
 
-          const { data: supaInsertData, error: supaErr } = await supabase
-            .from('surprises')
-            .insert([dbStandardRecord])
-            .select()
-            .single();
+          const supaPromise = supabase.from('surprises').insert([dbStandardRecord]).select().single();
+          const timeoutPromise = new Promise<{ data: any; error: any }>((resolve) =>
+            setTimeout(() => resolve({ data: null, error: new Error('Supabase timeout') }), 1500)
+          );
+
+          const { data: supaInsertData, error: supaErr } = await Promise.race([supaPromise, timeoutPromise]);
 
           if (supaInsertData && !supaErr) {
             finalId = supaInsertData.id || localId;
@@ -580,20 +581,25 @@ export const SurpriseForm: React.FC<SurpriseFormProps> = ({
               localStorage.setItem(`surprise_${finalId}`, JSON.stringify({ ...fallbackRecord, id: finalId }));
             } catch (e) {}
           } else {
-            console.warn('Client Supabase insert warning:', supaErr);
+            console.warn('Client Supabase insert warning/timeout:', supaErr);
           }
         } catch (supaEx) {
           console.warn('Client Supabase insert exception:', supaEx);
         }
       }
 
-      // 2. Server API fallback if not saved via client Supabase
+      // 2. Server API fallback with 1s fast timeout if not saved via client Supabase
       if (!isSavedToCloud) {
         try {
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 1000);
+
           const res = await fetch('/api/create-surprise', {
             method: 'POST',
-            body: formData
+            body: formData,
+            signal: controller.signal
           });
+          clearTimeout(timeoutId);
 
           const contentType = res.headers.get('content-type');
           if (res.ok && contentType && contentType.includes('application/json')) {
@@ -610,7 +616,7 @@ export const SurpriseForm: React.FC<SurpriseFormProps> = ({
             }
           }
         } catch (fetchErr) {
-          console.warn('API fetch failed:', fetchErr);
+          console.warn('API fetch failed/aborted:', fetchErr);
         }
       }
 
@@ -634,9 +640,6 @@ export const SurpriseForm: React.FC<SurpriseFormProps> = ({
 
       setCreatedResult({ id: finalId, link: fullShareableUrl });
       onCreated(finalId, fullShareableUrl);
-
-      // Auto-navigate creator directly to their live Preview page to inspect photos & details instantly!
-      onNavigateToSurprise(fullShareableUrl.replace(window.location.origin, ''));
     } catch (err: any) {
       console.error('Submission error:', err);
       setErrorMsg(err.message || 'Error creating surprise. Please try again.');
