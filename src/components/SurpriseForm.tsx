@@ -585,10 +585,14 @@ export const SurpriseForm: React.FC<SurpriseFormProps> = ({
         }
       }
 
-      // Save fallback in local storage if not already cached
+      // Cache record with uploaded photos in localStorage under finalId and localId
       try {
-        localStorage.setItem(`surprise_${localId}`, JSON.stringify(fallbackRecord));
-      } catch (e) {}
+        const fullRecordToCache = { ...fallbackRecord, id: finalId };
+        localStorage.setItem(`surprise_${finalId}`, JSON.stringify(fullRecordToCache));
+        localStorage.setItem(`surprise_${localId}`, JSON.stringify(fullRecordToCache));
+      } catch (e) {
+        console.warn('LocalStorage quota exceeded or unavailable', e);
+      }
 
       // 3. Construct URL - ONLY append #s= hash if NOT saved to cloud database
       let fullShareableUrl = `${window.location.origin}/surprise/${finalId}`;
@@ -601,6 +605,9 @@ export const SurpriseForm: React.FC<SurpriseFormProps> = ({
 
       setCreatedResult({ id: finalId, link: fullShareableUrl });
       onCreated(finalId, fullShareableUrl);
+
+      // Auto-navigate creator directly to their live Preview page to inspect photos & details instantly!
+      onNavigateToSurprise(fullShareableUrl.replace(window.location.origin, ''));
     } catch (err: any) {
       console.error('Submission error:', err);
       setErrorMsg(err.message || 'Error creating surprise. Please try again.');
