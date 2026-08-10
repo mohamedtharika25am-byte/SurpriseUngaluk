@@ -674,7 +674,7 @@ export const SurpriseForm: React.FC<SurpriseFormProps> = ({
           {/* Actions */}
           <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-2">
             <button
-              onClick={() => onNavigateToSurprise(createdResult.id)}
+              onClick={() => onNavigateToSurprise(createdResult.link.replace(window.location.origin, ''))}
               className="w-full sm:w-auto px-6 py-3.5 rounded-xl bg-gradient-to-r from-pink-600 to-violet-600 hover:from-pink-500 hover:to-violet-500 text-white font-semibold text-sm shadow-lg shadow-pink-500/20 flex items-center justify-center gap-2 cursor-pointer transition-transform active:scale-95"
             >
               <ExternalLink className="w-4 h-4" />

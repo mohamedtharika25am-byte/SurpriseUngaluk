@@ -48,7 +48,10 @@ export function App() {
           onCreated={(id, link) => {
             console.log('Surprise created:', id, link);
           }}
-          onNavigateToSurprise={(id) => navigateTo(`/surprise/${id}`)}
+          onNavigateToSurprise={(pathOrId) => {
+            const target = pathOrId.startsWith('/') ? pathOrId : `/surprise/${pathOrId}`;
+            navigateTo(target);
+          }}
         />
       );
     }
