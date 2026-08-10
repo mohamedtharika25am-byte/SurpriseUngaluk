@@ -14,7 +14,8 @@ import {
   ArrowLeft,
   Loader2,
   Volume2,
-  Clock
+  Clock,
+  Eye
 } from 'lucide-react';
 import { Surprise, ThemeType } from '../types';
 import { decodeSurpriseFromHash } from '../lib/urlHashHelper';
@@ -375,10 +376,23 @@ export const SurprisePage: React.FC<SurprisePageProps> = ({ id, onNavigateHome }
             initial={{ opacity: 0, y: -10 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -10 }}
-            className="mb-6 p-4 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-300 text-center font-semibold text-base sm:text-lg shadow-lg flex items-center justify-center gap-2 animate-bounce glow-gold"
+            className="mb-6 p-4 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-300 text-center font-semibold text-sm sm:text-base shadow-lg flex flex-col sm:flex-row items-center justify-center gap-3 glow-gold"
           >
-            <Clock className="w-5 h-5 text-amber-400 shrink-0" />
-            <span>{earlyAlertMessage}</span>
+            <div className="flex items-center gap-2">
+              <Clock className="w-5 h-5 text-amber-400 shrink-0" />
+              <span>{earlyAlertMessage}</span>
+            </div>
+            <button
+              onClick={() => {
+                setIsUnlocked(true);
+                setEarlyAlertMessage(null);
+                setTriggerConfetti(true);
+              }}
+              className="px-3.5 py-1.5 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-200 text-xs font-mono border border-amber-500/40 transition-colors cursor-pointer flex items-center gap-1.5"
+            >
+              <Eye className="w-3.5 h-3.5 text-amber-300" />
+              <span>Creator Test: Unlock Now 👁️</span>
+            </button>
           </motion.div>
         )}
       </AnimatePresence>
@@ -388,7 +402,7 @@ export const SurprisePage: React.FC<SurprisePageProps> = ({ id, onNavigateHome }
         <motion.div
           initial={{ scale: 0.95, opacity: 0 }}
           animate={{ scale: 1, opacity: 1 }}
-          className="text-center py-6"
+          className="text-center py-6 space-y-4"
         >
           <button
             onClick={handleOpenSurpriseClick}
@@ -398,9 +412,22 @@ export const SurprisePage: React.FC<SurprisePageProps> = ({ id, onNavigateHome }
             <span>Open the Surprise</span>
             <Sparkles className="w-6 h-6 text-amber-300 animate-spin" />
           </button>
-          <p className="text-xs text-white/40 font-light mt-3">
+          <p className="text-xs text-white/40 font-light">
             Click to reveal your personal greeting card, photo wall, and music!
           </p>
+
+          <div className="pt-2">
+            <button
+              onClick={() => {
+                setIsUnlocked(true);
+                setTriggerConfetti(true);
+              }}
+              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full bg-pink-500/10 hover:bg-pink-500/20 border border-pink-500/30 text-pink-300 hover:text-white text-xs font-mono transition-all hover:scale-105 active:scale-95 cursor-pointer"
+            >
+              <Eye className="w-3.5 h-3.5 text-pink-400" />
+              <span>Creator Test Mode: Instant Unlock & Inspect Content 👁️</span>
+            </button>
+          </div>
         </motion.div>
       )}
 
