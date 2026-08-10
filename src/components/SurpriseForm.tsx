@@ -433,20 +433,49 @@ export const SurpriseForm: React.FC<SurpriseFormProps> = ({
       formData.append('cake_cutting_enabled', String(cakeCuttingEnabled));
       formData.append('balloons_game_enabled', String(balloonsGameEnabled));
 
-      const beforeAfterData = (enableBeforeAfter && (beforeUrl.trim() || afterUrl.trim())) ? {
+      const beforeAfterData = enableBeforeAfter ? {
         beforeUrl: beforeUrl.trim() || 'https://images.unsplash.com/photo-1544717305-2782549b5136?auto=format&fit=crop&w=600&q=80',
         afterUrl: afterUrl.trim() || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=600&q=80',
-        beforeLabel,
-        afterLabel
+        beforeLabel: beforeLabel.trim() || 'Childhood / Earlier',
+        afterLabel: afterLabel.trim() || 'Present Day'
       } : null;
 
-      const activeTimeline = (enableTimeline && timelineEvents.length > 0) ? timelineEvents : null;
-      const activeQuiz = (enableQuiz && quizQuestions.length > 0) ? quizQuestions : null;
-      const activeJokes = (enableInsideJokes && insideJokes.length > 0) ? insideJokes : null;
-      const activeMessages = (enableHiddenMessages && hiddenMessages.length > 0) ? hiddenMessages : null;
-      const activeScratchCards = (enableScratchCards && scratchCards.length > 0) ? scratchCards : null;
-      const activeVoiceNote = (enableVoiceNote && voiceNoteUrl.trim()) ? voiceNoteUrl.trim() : null;
-      const activeBalloons = (balloonsGameEnabled && balloonMessages.length > 0) ? balloonMessages : null;
+      const activeTimeline = enableTimeline
+        ? (timelineEvents.length > 0 ? timelineEvents : [
+            { year: '2020', title: 'The Day We First Met ✨', description: 'The beginning of an awesome journey!', icon: 'Sparkles' },
+            { year: '2023', title: 'Unforgettable Memories 🚗', description: 'Special moments cherished forever.', icon: 'Heart' }
+          ])
+        : null;
+
+      const activeQuiz = enableQuiz
+        ? (quizQuestions.length > 0 ? quizQuestions : [
+            { question: 'What is our absolute favorite hangout memory?', options: ['Late Night Drive 🚗', 'Coffee Shop ☕', 'Beach Sunset 🌅', 'Movie Night 🍿'], correctIndex: 1, explanation: 'Coffee Shop is always our go-to spot! ☕' }
+          ])
+        : null;
+
+      const activeJokes = enableInsideJokes
+        ? (insideJokes.length > 0 ? insideJokes : [
+            { title: 'The Late Arrival Legend ⏰', joke: 'Remember when you blamed traffic on a Sunday morning?' }
+          ])
+        : null;
+
+      const activeMessages = enableHiddenMessages
+        ? (hiddenMessages.length > 0 ? hiddenMessages : ['You bring so much warmth and happiness into everyone\'s life! ✨', 'May this year bring you endless success and joy! ❤️'])
+        : null;
+
+      const activeScratchCards = enableScratchCards
+        ? (scratchCards.length > 0 ? scratchCards : [
+            { title: 'Special Voucher 🎟️', secretQuote: 'Free Treat on Me! 🍕' }
+          ])
+        : null;
+
+      const activeVoiceNote = (enableVoiceNote && voiceNoteUrl.trim())
+        ? voiceNoteUrl.trim()
+        : (enableVoiceNote ? 'https://cdn.pixabay.com/download/audio/2022/03/15/audio_c8c8a81617.mp3?filename=happy-birthday-110058.mp3' : null);
+
+      const activeBalloons = balloonsGameEnabled
+        ? (balloonMessages.length > 0 ? balloonMessages : ['May your year be filled with success! ✨', 'Stay happy & healthy always! 🎈', 'Keep shining bright! 🌟'])
+        : null;
 
       if (beforeAfterData) formData.append('before_after', JSON.stringify(beforeAfterData));
       if (activeTimeline) formData.append('timeline_events', JSON.stringify(activeTimeline));

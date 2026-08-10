@@ -1,6 +1,6 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef } from 'react';
 import { motion } from 'motion/react';
-import { Mic, Play, Pause, Volume2, Sparkles, Radio } from 'lucide-react';
+import { Play, Pause, Radio, AlertCircle } from 'lucide-react';
 
 interface VoiceNotePlayerProps {
   voiceNoteUrl?: string | null;
@@ -11,6 +11,7 @@ export const VoiceNotePlayer: React.FC<VoiceNotePlayerProps> = ({ voiceNoteUrl, 
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
+  const [hasError, setHasError] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
   if (!voiceNoteUrl) return null;
@@ -22,11 +23,17 @@ export const VoiceNotePlayer: React.FC<VoiceNotePlayerProps> = ({ voiceNoteUrl, 
       audio.pause();
       setIsPlaying(false);
     } else {
-      audio.play().then(() => setIsPlaying(true)).catch(() => {});
+      setHasError(false);
+      audio.play().then(() => setIsPlaying(true)).catch((err) => {
+        console.warn('Voice note playback error:', err);
+        setHasError(true);
+        setIsPlaying(false);
+      });
     }
   };
 
   const formatTime = (secs: number) => {
+    if (isNaN(secs) || !isFinite(secs)) return '0:00';
     const mins = Math.floor(secs / 60);
     const remainder = Math.floor(secs % 60);
     return `${mins}:${remainder < 10 ? '0' : ''}${remainder}`;
@@ -56,7 +63,17 @@ export const VoiceNotePlayer: React.FC<VoiceNotePlayerProps> = ({ voiceNoteUrl, 
 
         <div className="flex-1 space-y-1.5">
           <div className="flex items-center justify-between text-[11px] font-mono text-white/70">
-            <span>{isPlaying ? 'Playing Voice Note...' : 'Tap to hear voice note'}</span>
+            <span>
+              {hasError ? (
+                <span className="text-amber-300 flex items-center gap-1">
+                  <AlertCircle className="w-3.5 h-3.5 inline text-amber-400" /> Voice note format unsupported
+                </span>
+              ) : isPlaying ? (
+                'Playing Voice Note...'
+              ) : (
+                'Tap to hear voice note'
+              )}
+            </span>
             <span>{formatTime(currentTime)} / {formatTime(duration || 0)}</span>
           </div>
 
@@ -76,6 +93,10 @@ export const VoiceNotePlayer: React.FC<VoiceNotePlayerProps> = ({ voiceNoteUrl, 
         <audio
           ref={audioRef}
           src={voiceNoteUrl}
+          onError={() => {
+            setHasError(true);
+            setIsPlaying(false);
+          }}
           onTimeUpdate={() => {
             if (audioRef.current) setCurrentTime(audioRef.current.currentTime);
           }}

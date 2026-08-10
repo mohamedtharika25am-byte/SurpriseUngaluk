@@ -43,7 +43,7 @@ function base64ToUtf8(str: string): string {
 
 export function encodeSurpriseToHash(surprise: Surprise): string {
   try {
-    // Ultra-compact minified representation preserving custom photos if provided
+    // Compact minified representation preserving custom photos & interactive features
     const minified: any = {
       r: surprise.recipient_name,
       o: surprise.occasion_type,
@@ -57,10 +57,17 @@ export function encodeSurpriseToHash(surprise: Surprise): string {
       x: surprise.timer_enabled ? 1 : 0
     };
 
-    if (surprise.photo_urls && surprise.photo_urls.length > 0) {
-      // Include custom photo URLs / compressed data strings
-      minified.u = surprise.photo_urls;
-    }
+    if (surprise.photo_urls && surprise.photo_urls.length > 0) minified.u = surprise.photo_urls;
+    if (surprise.before_after) minified.ba = surprise.before_after;
+    if (surprise.timeline_events?.length) minified.te = surprise.timeline_events;
+    if (surprise.quiz_questions?.length) minified.qq = surprise.quiz_questions;
+    if (surprise.inside_jokes?.length) minified.ij = surprise.inside_jokes;
+    if (surprise.hidden_messages?.length) minified.hm = surprise.hidden_messages;
+    if (surprise.scratch_cards?.length) minified.sc = surprise.scratch_cards;
+    if (surprise.voice_note_url) minified.vn = surprise.voice_note_url;
+    if (surprise.balloon_messages?.length) minified.bm = surprise.balloon_messages;
+    if (surprise.cake_cutting_enabled !== undefined) minified.ck = surprise.cake_cutting_enabled ? 1 : 0;
+    if (surprise.balloons_game_enabled !== undefined) minified.bg = surprise.balloons_game_enabled ? 1 : 0;
 
     const jsonStr = JSON.stringify(minified);
     return utf8ToBase64(jsonStr);
@@ -109,8 +116,16 @@ export function decodeSurpriseFromHash(hashStr: string): Surprise | null {
           partner_name: parsed.p || null,
           nickname: parsed.n || null,
           theme_preference: parsed.t || 'midnight',
-          cake_cutting_enabled: true,
-          balloons_game_enabled: true
+          before_after: parsed.ba || null,
+          timeline_events: parsed.te || null,
+          quiz_questions: parsed.qq || null,
+          inside_jokes: parsed.ij || null,
+          hidden_messages: parsed.hm || null,
+          scratch_cards: parsed.sc || null,
+          voice_note_url: parsed.vn || null,
+          balloon_messages: parsed.bm || null,
+          cake_cutting_enabled: parsed.ck !== 0,
+          balloons_game_enabled: parsed.bg !== 0
         } as Surprise;
       }
 
