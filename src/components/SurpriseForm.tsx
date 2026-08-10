@@ -517,8 +517,8 @@ export const SurpriseForm: React.FC<SurpriseFormProps> = ({
 
       const finalSongUrl = songBase64 || (spotifyUrl.trim() ? spotifyUrl.trim() : null);
 
-      // Generate local ID for client fallback
-      const localId = 'surprise_' + Date.now() + '_' + Math.random().toString(36).substring(2, 8);
+      // Generate ultra-short clean local ID for client fallback (e.g. s_lxa92k)
+      const localId = 's_' + Date.now().toString(36) + Math.random().toString(36).substring(2, 6);
       const fallbackRecord: Surprise = {
         id: localId,
         recipient_name: recipientName.trim(),
@@ -629,11 +629,11 @@ export const SurpriseForm: React.FC<SurpriseFormProps> = ({
         console.warn('LocalStorage quota exceeded or unavailable', e);
       }
 
-      // 3. Construct URL - ONLY append #s= hash if NOT saved to cloud database
+      // 3. Construct URL - keep URL ultra-clean and short (< 50 chars max for WhatsApp & QR)
       let fullShareableUrl = `${window.location.origin}/surprise/${finalId}`;
       if (!isSavedToCloud) {
         const hashData = encodeSurpriseToHash(fallbackRecord);
-        if (hashData) {
+        if (hashData && hashData.length < 250) {
           fullShareableUrl += `#s=${encodeURIComponent(hashData)}`;
         }
       }

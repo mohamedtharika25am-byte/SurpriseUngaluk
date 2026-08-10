@@ -57,14 +57,22 @@ export function encodeSurpriseToHash(surprise: Surprise): string {
       x: surprise.timer_enabled ? 1 : 0
     };
 
-    if (surprise.photo_urls && surprise.photo_urls.length > 0) minified.u = surprise.photo_urls;
-    if (surprise.before_after) minified.ba = surprise.before_after;
+    if (surprise.photo_urls && surprise.photo_urls.length > 0) {
+      const httpPhotos = surprise.photo_urls.filter((u) => u && !u.startsWith('data:'));
+      if (httpPhotos.length > 0) minified.u = httpPhotos;
+    }
+    if (surprise.before_after) {
+      const ba = { ...surprise.before_after };
+      if (ba.beforeUrl?.startsWith('data:')) delete ba.beforeUrl;
+      if (ba.afterUrl?.startsWith('data:')) delete ba.afterUrl;
+      minified.ba = ba;
+    }
     if (surprise.timeline_events?.length) minified.te = surprise.timeline_events;
     if (surprise.quiz_questions?.length) minified.qq = surprise.quiz_questions;
     if (surprise.inside_jokes?.length) minified.ij = surprise.inside_jokes;
     if (surprise.hidden_messages?.length) minified.hm = surprise.hidden_messages;
     if (surprise.scratch_cards?.length) minified.sc = surprise.scratch_cards;
-    if (surprise.voice_note_url) minified.vn = surprise.voice_note_url;
+    if (surprise.voice_note_url && !surprise.voice_note_url.startsWith('data:')) minified.vn = surprise.voice_note_url;
     if (surprise.balloon_messages?.length) minified.bm = surprise.balloon_messages;
     if (surprise.cake_cutting_enabled !== undefined) minified.ck = surprise.cake_cutting_enabled ? 1 : 0;
     if (surprise.balloons_game_enabled !== undefined) minified.bg = surprise.balloons_game_enabled ? 1 : 0;
