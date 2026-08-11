@@ -545,14 +545,17 @@ export const SurpriseForm: React.FC<SurpriseFormProps> = ({
             const filePath = `${localId}/photo_${i + 1}_${Date.now()}.jpg`;
             const { error: uploadErr } = await supabase.storage
               .from('photos')
-              .upload(filePath, blob, { contentType: 'image/jpeg', upsert: true });
-            if (uploadErr) return null;
+              .upload(filePath, blob, { contentType: 'image/jpeg', upsert: false });
+            if (uploadErr) {
+              console.warn('Photo upload error for', filePath, uploadErr);
+              return null;
+            }
             const { data: publicData } = supabase.storage.from('photos').getPublicUrl(filePath);
             return publicData?.publicUrl || null;
           });
 
           const uploadTimeout = new Promise<null[]>((resolve) =>
-            setTimeout(() => resolve([]), 5000)
+            setTimeout(() => resolve([]), 25000)
           );
           const results = await Promise.race([Promise.all(uploadPromises), uploadTimeout]);
           cloudPhotoUrls = (results as (string | null)[]).filter(Boolean) as string[];
@@ -580,7 +583,7 @@ export const SurpriseForm: React.FC<SurpriseFormProps> = ({
 
           const supaPromise = supabase.from('surprises').insert([dbRecord]).select().single();
           const timeoutPromise = new Promise<{ data: any; error: any }>((resolve) =>
-            setTimeout(() => resolve({ data: null, error: new Error('DB timeout') }), 4000)
+            setTimeout(() => resolve({ data: null, error: new Error('DB timeout') }), 15000)
           );
           const { data: supaData, error: supaErr } = await Promise.race([supaPromise, timeoutPromise]);
 
