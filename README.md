@@ -172,7 +172,7 @@ CREATE TABLE IF NOT EXISTS public.surprises (
   balloon_messages JSONB,
   cake_cutting_enabled BOOLEAN DEFAULT true,
   balloons_game_enabled BOOLEAN DEFAULT true,
-  theme_preference JSONB,
+  theme_preference TEXT DEFAULT 'midnight',
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 

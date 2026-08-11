@@ -470,9 +470,9 @@ export const SurpriseForm: React.FC<SurpriseFormProps> = ({
           ])
         : null;
 
-      const activeVoiceNote = (enableVoiceNote && voiceNoteUrl.trim() && !voiceNoteUrl.startsWith('data:'))
+      const activeVoiceNote = (enableVoiceNote && voiceNoteUrl.trim())
         ? voiceNoteUrl.trim()
-        : (enableVoiceNote ? 'https://cdn.pixabay.com/download/audio/2022/03/15/audio_c8c8a81617.mp3?filename=happy-birthday-110058.mp3' : null);
+        : null;
 
       const activeBalloons = balloonsGameEnabled
         ? (balloonMessages.length > 0 ? balloonMessages : ['May your year be filled with success! ✨', 'Stay happy & healthy always! 🎈', 'Keep shining bright! 🌟'])
@@ -564,6 +564,37 @@ export const SurpriseForm: React.FC<SurpriseFormProps> = ({
         }
       }
 
+      // ─── STEP 1b: Upload voice note to Supabase Storage → get permanent public URL ───
+      let cloudVoiceNoteUrl: string | null = activeVoiceNote;
+      if (supabase && enableVoiceNote && voiceNoteUrl.trim() && voiceNoteUrl.startsWith('data:')) {
+        try {
+          const base64Data = voiceNoteUrl.split(',')[1];
+          if (base64Data) {
+            const mimeMatch = voiceNoteUrl.match(/^data:(audio\/[^;]+);/);
+            const mimeType = mimeMatch ? mimeMatch[1] : 'audio/mpeg';
+            const ext = mimeType.includes('wav') ? 'wav' : mimeType.includes('ogg') ? 'ogg' : 'mp3';
+            const byteChars = atob(base64Data);
+            const byteNums = new Uint8Array(byteChars.length);
+            for (let j = 0; j < byteChars.length; j++) byteNums[j] = byteChars.charCodeAt(j);
+            const blob = new Blob([byteNums], { type: mimeType });
+            const filePath = `${localId}/voice_note_${Date.now()}.${ext}`;
+            const { error: vnUploadErr } = await supabase.storage
+              .from('audio')
+              .upload(filePath, blob, { contentType: mimeType, upsert: false });
+            if (!vnUploadErr) {
+              const { data: vnPublicData } = supabase.storage.from('audio').getPublicUrl(filePath);
+              if (vnPublicData?.publicUrl) {
+                cloudVoiceNoteUrl = vnPublicData.publicUrl;
+              }
+            } else {
+              console.warn('Voice note upload error:', vnUploadErr);
+            }
+          }
+        } catch (vnErr) {
+          console.warn('Voice note upload failed:', vnErr);
+        }
+      }
+
       // ─── STEP 2: Insert to Supabase DB with cloud photo URLs ───
       if (supabase) {
         try {
@@ -578,7 +609,18 @@ export const SurpriseForm: React.FC<SurpriseFormProps> = ({
             timer_enabled: timerEnabled,
             birth_date: birthDate.trim() || null,
             partner_name: partnerName.trim() || null,
-            nickname: nickname.trim() || null
+            nickname: nickname.trim() || null,
+            before_after: beforeAfterData || null,
+            timeline_events: activeTimeline || null,
+            quiz_questions: activeQuiz || null,
+            inside_jokes: activeJokes || null,
+            hidden_messages: activeMessages || null,
+            scratch_cards: activeScratchCards || null,
+            voice_note_url: cloudVoiceNoteUrl || null,
+            balloon_messages: activeBalloons || null,
+            cake_cutting_enabled: cakeCuttingEnabled,
+            balloons_game_enabled: balloonsGameEnabled,
+            theme_preference: themePreference || 'midnight'
           };
 
           const supaPromise = supabase.from('surprises').insert([dbRecord]).select().single();

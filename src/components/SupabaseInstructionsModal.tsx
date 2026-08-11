@@ -21,6 +21,17 @@ CREATE TABLE IF NOT EXISTS public.surprises (
   birth_date TEXT,
   partner_name TEXT,
   nickname TEXT,
+  before_after JSONB,
+  timeline_events JSONB,
+  quiz_questions JSONB,
+  inside_jokes JSONB,
+  hidden_messages JSONB,
+  scratch_cards JSONB,
+  voice_note_url TEXT,
+  balloon_messages JSONB,
+  cake_cutting_enabled BOOLEAN DEFAULT true,
+  balloons_game_enabled BOOLEAN DEFAULT true,
+  theme_preference TEXT DEFAULT 'midnight',
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 

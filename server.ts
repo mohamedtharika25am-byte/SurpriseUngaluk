@@ -318,7 +318,7 @@ app.post(
               .from('photos')
               .upload(filePath, photo.buffer, {
                 contentType: photo.mimetype,
-                upsert: true
+                upsert: false
               });
 
             if (!uploadError) {
@@ -340,7 +340,7 @@ app.post(
               .from('audio')
               .upload(filePath, songFile.buffer, {
                 contentType: songFile.mimetype,
-                upsert: true
+                upsert: false
               });
 
             if (!songUploadError) {
