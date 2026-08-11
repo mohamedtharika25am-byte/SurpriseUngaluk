@@ -85,35 +85,28 @@ export const SurprisePage: React.FC<SurprisePageProps> = ({ id, onNavigateHome }
     };
 
     try {
-      // 0. Check URL hash first (instant fallback)
+      // 0. Check URL hash first (instant self-contained fallback — no network needed)
       if (window.location.hash) {
         const hashSurprise = decodeSurpriseFromHash(window.location.hash);
         if (hashSurprise) {
-          applySurprise(hashSurprise);
+          // Merge any cached photos from localStorage since hash won't contain photos
           try {
-            localStorage.setItem(`surprise_${id}`, JSON.stringify(hashSurprise));
+            const localStr = localStorage.getItem(`surprise_${id}`);
+            if (localStr) {
+              const localParsed: Surprise = JSON.parse(localStr);
+              if (localParsed.photo_urls && localParsed.photo_urls.length > 0) {
+                hashSurprise.photo_urls = localParsed.photo_urls;
+              }
+            }
           } catch (e) {}
+          applySurprise(hashSurprise);
+          try { localStorage.setItem(`surprise_${id}`, JSON.stringify(hashSurprise)); } catch (e) {}
           setIsLoading(false);
           return;
         }
       }
 
-      // 1. Check local storage
-      try {
-        const localDataStr = localStorage.getItem(`surprise_${id}`) || localStorage.getItem(id);
-        if (localDataStr) {
-          const parsed: Surprise = JSON.parse(localDataStr);
-          if (parsed && parsed.id) {
-            applySurprise(parsed);
-            setIsLoading(false);
-            return;
-          }
-        }
-      } catch (e) {
-        console.warn('Error reading from localStorage:', e);
-      }
-
-      // 2. Demo surprise fallback
+      // 1. Demo surprise fallback
       if (id === 'demo-birthday-surprise' || id === 'demo') {
         const demoData: Surprise = {
           id: 'demo-birthday-surprise',
@@ -136,27 +129,7 @@ export const SurprisePage: React.FC<SurprisePageProps> = ({ id, onNavigateHome }
         return;
       }
 
-      // 3. Server API fetch
-      try {
-        const res = await fetch(`/api/surprise/${id}`);
-        const contentType = res.headers.get('content-type');
-
-        if (res.ok && contentType && contentType.includes('application/json')) {
-          const data = await res.json();
-          if (data && data.success && data.surprise) {
-            applySurprise(data.surprise);
-            try {
-              localStorage.setItem(`surprise_${id}`, JSON.stringify(data.surprise));
-            } catch (e) {}
-            setIsLoading(false);
-            return;
-          }
-        }
-      } catch (apiErr) {
-        console.warn('API fetch attempt failed, trying Supabase fallback:', apiErr);
-      }
-
-      // 4. Client-side Supabase fetch (if API call fails/unavailable)
+      // 2. Client-side Supabase fetch — PRIMARY source (data is saved here on creation)
       if (supabase) {
         try {
           const { data: supaData, error: supaErr } = await supabase
@@ -166,16 +139,58 @@ export const SurprisePage: React.FC<SurprisePageProps> = ({ id, onNavigateHome }
             .single();
 
           if (supaData && !supaErr) {
-            applySurprise(supaData);
+            let finalData = supaData as Surprise;
+            // Supplement with localStorage photos if DB photos empty (creator's device has base64 previews)
             try {
-              localStorage.setItem(`surprise_${id}`, JSON.stringify(supaData));
+              const localStr = localStorage.getItem(`surprise_${id}`);
+              if (localStr) {
+                const localParsed: Surprise = JSON.parse(localStr);
+                if ((!finalData.photo_urls || finalData.photo_urls.length === 0) &&
+                    localParsed.photo_urls && localParsed.photo_urls.length > 0) {
+                  finalData = { ...finalData, photo_urls: localParsed.photo_urls };
+                }
+              }
             } catch (e) {}
+            applySurprise(finalData);
+            try { localStorage.setItem(`surprise_${id}`, JSON.stringify(finalData)); } catch (e) {}
             setIsLoading(false);
             return;
           }
         } catch (supaException) {
           console.warn('Supabase client fetch exception:', supaException);
         }
+      }
+
+      // 3. Check localStorage (creator's device — has full data with photos)
+      try {
+        const localDataStr = localStorage.getItem(`surprise_${id}`) || localStorage.getItem(id);
+        if (localDataStr) {
+          const parsed: Surprise = JSON.parse(localDataStr);
+          if (parsed && parsed.id) {
+            applySurprise(parsed);
+            setIsLoading(false);
+            return;
+          }
+        }
+      } catch (e) {
+        console.warn('Error reading from localStorage:', e);
+      }
+
+      // 4. Server API fetch (secondary fallback)
+      try {
+        const res = await fetch(`/api/surprise/${id}`);
+        const contentType = res.headers.get('content-type');
+        if (res.ok && contentType && contentType.includes('application/json')) {
+          const data = await res.json();
+          if (data && data.success && data.surprise) {
+            applySurprise(data.surprise);
+            try { localStorage.setItem(`surprise_${id}`, JSON.stringify(data.surprise)); } catch (e) {}
+            setIsLoading(false);
+            return;
+          }
+        }
+      } catch (apiErr) {
+        console.warn('API fetch attempt failed:', apiErr);
       }
 
       throw new Error('Surprise link not found or invalid.');

@@ -100,6 +100,7 @@ export const SurpriseForm: React.FC<SurpriseFormProps> = ({
   const [afterLabel, setAfterLabel] = useState('Grown Up / Stunning Today ✨');
 
   const [spotifyUrl, setSpotifyUrl] = useState('');
+  const [musicEnabled, setMusicEnabled] = useState(true);
 
   const [enableVoiceNote, setEnableVoiceNote] = useState(false);
   const [voiceNoteUrl, setVoiceNoteUrl] = useState('');
@@ -209,7 +210,7 @@ export const SurpriseForm: React.FC<SurpriseFormProps> = ({
   // Status & Submit states
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
-  const [createdResult, setCreatedResult] = useState<{ id: string; link: string } | null>(null);
+  const [createdResult, setCreatedResult] = useState<{ id: string; link: string; hasCloudPhotos?: boolean; hasMp3?: boolean } | null>(null);
   const [copiedLink, setCopiedLink] = useState(false);
 
   const photoInputRef = useRef<HTMLInputElement>(null);
@@ -416,7 +417,7 @@ export const SurpriseForm: React.FC<SurpriseFormProps> = ({
       const formData = new FormData();
       formData.append('recipient_name', recipientName.trim());
       formData.append('occasion_type', occasionType);
-      
+
       // Convert local datetime input to ISO 8601 UTC string
       const isoDatetime = new Date(occasionDatetime).toISOString();
       formData.append('occasion_datetime', isoDatetime);
@@ -442,20 +443,20 @@ export const SurpriseForm: React.FC<SurpriseFormProps> = ({
 
       const activeTimeline = enableTimeline
         ? (timelineEvents.length > 0 ? timelineEvents : [
-            { year: '2020', title: 'The Day We First Met ✨', description: 'The beginning of an awesome journey!', icon: 'Sparkles' },
-            { year: '2023', title: 'Unforgettable Memories 🚗', description: 'Special moments cherished forever.', icon: 'Heart' }
+            { id: 't1', year: '2020', title: 'The Day We First Met ✨', description: 'The beginning of an awesome journey!', emoji: '✨' },
+            { id: 't2', year: '2023', title: 'Unforgettable Memories 🚗', description: 'Special moments cherished forever.', emoji: '🌟' }
           ])
         : null;
 
       const activeQuiz = enableQuiz
         ? (quizQuestions.length > 0 ? quizQuestions : [
-            { question: 'What is our absolute favorite hangout memory?', options: ['Late Night Drive 🚗', 'Coffee Shop ☕', 'Beach Sunset 🌅', 'Movie Night 🍿'], correctIndex: 1, explanation: 'Coffee Shop is always our go-to spot! ☕' }
+            { id: 'q1', question: 'What is our absolute favorite hangout memory?', options: ['Late Night Drive 🚗', 'Coffee Shop ☕', 'Beach Sunset 🌅', 'Movie Night 🍿'], correctIndex: 1, explanation: 'Coffee Shop is always our go-to spot! ☕' }
           ])
         : null;
 
       const activeJokes = enableInsideJokes
         ? (insideJokes.length > 0 ? insideJokes : [
-            { title: 'The Late Arrival Legend ⏰', joke: 'Remember when you blamed traffic on a Sunday morning?' }
+            { id: 'j1', title: 'The Late Arrival Legend ⏰', joke: 'Remember when you blamed traffic on a Sunday morning?', emoji: '⏰' }
           ])
         : null;
 
@@ -465,17 +466,20 @@ export const SurpriseForm: React.FC<SurpriseFormProps> = ({
 
       const activeScratchCards = enableScratchCards
         ? (scratchCards.length > 0 ? scratchCards : [
-            { title: 'Special Voucher 🎟️', secretQuote: 'Free Treat on Me! 🍕' }
+            { id: 's1', title: 'Special Voucher 🎟️', reward: 'Free Treat on Me! 🍕', emoji: '🎁' }
           ])
         : null;
 
-      const activeVoiceNote = (enableVoiceNote && voiceNoteUrl.trim())
+      const activeVoiceNote = (enableVoiceNote && voiceNoteUrl.trim() && !voiceNoteUrl.startsWith('data:'))
         ? voiceNoteUrl.trim()
         : (enableVoiceNote ? 'https://cdn.pixabay.com/download/audio/2022/03/15/audio_c8c8a81617.mp3?filename=happy-birthday-110058.mp3' : null);
 
       const activeBalloons = balloonsGameEnabled
         ? (balloonMessages.length > 0 ? balloonMessages : ['May your year be filled with success! ✨', 'Stay happy & healthy always! 🎈', 'Keep shining bright! 🌟'])
         : null;
+
+      // Spotify URL only (no MP3 base64 in shareable links - too large)
+      const activeSpotifyUrl = (musicEnabled && spotifyUrl.trim()) ? spotifyUrl.trim() : null;
 
       if (beforeAfterData) formData.append('before_after', JSON.stringify(beforeAfterData));
       if (activeTimeline) formData.append('timeline_events', JSON.stringify(activeTimeline));
@@ -486,39 +490,15 @@ export const SurpriseForm: React.FC<SurpriseFormProps> = ({
       if (activeVoiceNote) formData.append('voice_note_url', activeVoiceNote);
       if (activeBalloons) formData.append('balloon_messages', JSON.stringify(activeBalloons));
 
-
-      // Append photo files
-      photos.forEach((photo) => {
-        formData.append('photos', photo);
-      });
-
-      // Append song file
-      if (song) {
-        formData.append('song', song);
-      }
-
-      // Generate base64 data URLs in parallel with fast canvas compression (20x faster!)
+      // Compress all photos client-side
       const photoDataUrls: string[] = photos.length > 0
         ? await Promise.all(photos.map((photo) => compressPhotoFile(photo)))
         : [];
-      formData.append('photoDataUrls', JSON.stringify(photoDataUrls));
 
-      let songBase64: string | null = null;
-      if (song) {
-        const songReader = new FileReader();
-        songBase64 = await new Promise<string>((resolve) => {
-          songReader.onload = () => resolve(songReader.result as string);
-          songReader.readAsDataURL(song);
-        });
-        formData.append('songDataUrl', songBase64);
-      } else if (spotifyUrl.trim()) {
-        formData.append('songDataUrl', spotifyUrl.trim());
-      }
+      // Ultra-short local ID
+      const localId = 's_' + Date.now().toString(36) + Math.random().toString(36).substring(2, 5);
 
-      const finalSongUrl = songBase64 || (spotifyUrl.trim() ? spotifyUrl.trim() : null);
-
-      // Generate ultra-short clean local ID for client fallback (e.g. s_lxa92k)
-      const localId = 's_' + Date.now().toString(36) + Math.random().toString(36).substring(2, 6);
+      // Full record with all data for localStorage (creator can see everything on their device)
       const fallbackRecord: Surprise = {
         id: localId,
         recipient_name: recipientName.trim(),
@@ -526,8 +506,8 @@ export const SurpriseForm: React.FC<SurpriseFormProps> = ({
         occasion_datetime: isoDatetime,
         sender_name: senderName.trim(),
         message: message.trim(),
-        photo_urls: photoDataUrls,
-        song_url: finalSongUrl,
+        photo_urls: photoDataUrls,     // base64 for local preview
+        song_url: activeSpotifyUrl,    // only Spotify in shareable record
         timer_enabled: timerEnabled,
         created_at: new Date().toISOString(),
         birth_date: birthDate.trim() || null,
@@ -548,100 +528,128 @@ export const SurpriseForm: React.FC<SurpriseFormProps> = ({
 
       let finalId = localId;
       let isSavedToCloud = false;
+      let cloudPhotoUrls: string[] = [];
 
-      // 1. Direct Supabase insert from client with clean lightweight payload (<2KB)
+      // ─── STEP 1: Upload photos to Supabase Storage → get permanent public URLs ───
+      if (supabase && photoDataUrls.length > 0) {
+        try {
+          const uploadPromises = photoDataUrls.map(async (dataUrl, i) => {
+            if (!dataUrl || dataUrl.length < 50) return null;
+            // Convert base64 to blob
+            const base64Data = dataUrl.split(',')[1];
+            if (!base64Data) return null;
+            const byteChars = atob(base64Data);
+            const byteNums = new Uint8Array(byteChars.length);
+            for (let j = 0; j < byteChars.length; j++) byteNums[j] = byteChars.charCodeAt(j);
+            const blob = new Blob([byteNums], { type: 'image/jpeg' });
+            const filePath = `${localId}/photo_${i + 1}_${Date.now()}.jpg`;
+            const { error: uploadErr } = await supabase.storage
+              .from('photos')
+              .upload(filePath, blob, { contentType: 'image/jpeg', upsert: true });
+            if (uploadErr) return null;
+            const { data: publicData } = supabase.storage.from('photos').getPublicUrl(filePath);
+            return publicData?.publicUrl || null;
+          });
+
+          const uploadTimeout = new Promise<null[]>((resolve) =>
+            setTimeout(() => resolve([]), 5000)
+          );
+          const results = await Promise.race([Promise.all(uploadPromises), uploadTimeout]);
+          cloudPhotoUrls = (results as (string | null)[]).filter(Boolean) as string[];
+        } catch (storErr) {
+          console.warn('Photo storage upload failed:', storErr);
+        }
+      }
+
+      // ─── STEP 2: Insert to Supabase DB with cloud photo URLs ───
       if (supabase) {
         try {
-          // Exclude giant base64 data strings from direct DB column insert for 10x faster execution
-          const cleanPhotoUrls = photoDataUrls.filter((u) => u && !u.startsWith('data:'));
-          const cleanSongUrl = (finalSongUrl && !finalSongUrl.startsWith('data:')) ? finalSongUrl : (spotifyUrl.trim() || null);
-          
-          const dbStandardRecord: any = {
+          const dbRecord: any = {
             recipient_name: recipientName.trim(),
             occasion_type: occasionType,
             occasion_datetime: isoDatetime,
             sender_name: senderName.trim(),
             message: message.trim(),
-            photo_urls: cleanPhotoUrls,
-            song_url: cleanSongUrl,
+            photo_urls: cloudPhotoUrls.length > 0 ? cloudPhotoUrls : [],
+            song_url: activeSpotifyUrl,
             timer_enabled: timerEnabled,
             birth_date: birthDate.trim() || null,
             partner_name: partnerName.trim() || null,
             nickname: nickname.trim() || null
           };
 
-          const supaPromise = supabase.from('surprises').insert([dbStandardRecord]).select().single();
+          const supaPromise = supabase.from('surprises').insert([dbRecord]).select().single();
           const timeoutPromise = new Promise<{ data: any; error: any }>((resolve) =>
-            setTimeout(() => resolve({ data: null, error: new Error('Supabase timeout') }), 3500)
+            setTimeout(() => resolve({ data: null, error: new Error('DB timeout') }), 4000)
           );
+          const { data: supaData, error: supaErr } = await Promise.race([supaPromise, timeoutPromise]);
 
-          const { data: supaInsertData, error: supaErr } = await Promise.race([supaPromise, timeoutPromise]);
-
-          if (supaInsertData && !supaErr) {
-            finalId = supaInsertData.id || localId;
+          if (supaData && !supaErr) {
+            finalId = supaData.id || localId;
             isSavedToCloud = true;
+            // Cache full record (with base64 photos for local viewing) under the cloud ID
             try {
-              localStorage.setItem(`surprise_${finalId}`, JSON.stringify({ ...fallbackRecord, id: finalId }));
+              const fullRecord = { ...fallbackRecord, id: finalId, photo_urls: cloudPhotoUrls.length > 0 ? cloudPhotoUrls : photoDataUrls };
+              localStorage.setItem(`surprise_${finalId}`, JSON.stringify(fullRecord));
             } catch (e) {}
           } else {
-            console.warn('Client Supabase insert warning/timeout:', supaErr);
+            console.warn('DB insert failed/timeout:', supaErr);
           }
-        } catch (supaEx) {
-          console.warn('Client Supabase insert exception:', supaEx);
+        } catch (ex) {
+          console.warn('Supabase DB exception:', ex);
         }
       }
 
-      // 2. Server API fallback if not saved via client Supabase
+      // ─── STEP 3: Server API fallback ───
       if (!isSavedToCloud) {
         try {
           const controller = new AbortController();
-          const timeoutId = setTimeout(() => controller.abort(), 2000);
-
+          const timeoutId = setTimeout(() => controller.abort(), 2500);
+          formData.append('photoDataUrls', JSON.stringify(photoDataUrls));
+          if (activeSpotifyUrl) formData.append('songDataUrl', activeSpotifyUrl);
           const res = await fetch('/api/create-surprise', {
             method: 'POST',
             body: formData,
             signal: controller.signal
           });
           clearTimeout(timeoutId);
-
           const contentType = res.headers.get('content-type');
-          if (res.ok && contentType && contentType.includes('application/json')) {
+          if (res.ok && contentType?.includes('application/json')) {
             const data: ApiCreateSurpriseResponse = await res.json();
             if (data.success && data.id) {
               finalId = data.id;
-              if (data.storageMode === 'supabase') {
-                isSavedToCloud = true;
-              }
+              if (data.storageMode === 'supabase') isSavedToCloud = true;
               const recordToSave = data.surprise || { ...fallbackRecord, id: finalId };
-              try {
-                localStorage.setItem(`surprise_${finalId}`, JSON.stringify(recordToSave));
-              } catch (e) {}
+              try { localStorage.setItem(`surprise_${finalId}`, JSON.stringify(recordToSave)); } catch (e) {}
             }
           }
         } catch (fetchErr) {
-          console.warn('API fetch failed/aborted:', fetchErr);
+          console.warn('API fallback failed/aborted:', fetchErr);
         }
       }
 
-      // Cache record in localStorage under finalId and localId
+      // ─── STEP 4: Cache everything in localStorage ───
       try {
-        const fullRecordToCache = { ...fallbackRecord, id: finalId };
-        localStorage.setItem(`surprise_${finalId}`, JSON.stringify(fullRecordToCache));
-        localStorage.setItem(`surprise_${localId}`, JSON.stringify(fullRecordToCache));
+        // Always store with base64 photos so creator can preview on this device
+        const cacheRecord = { ...fallbackRecord, id: finalId, photo_urls: cloudPhotoUrls.length > 0 ? cloudPhotoUrls : photoDataUrls };
+        localStorage.setItem(`surprise_${finalId}`, JSON.stringify(cacheRecord));
+        localStorage.setItem(`surprise_${localId}`, JSON.stringify(cacheRecord));
       } catch (e) {
-        console.warn('LocalStorage quota exceeded or unavailable', e);
+        console.warn('localStorage cache failed:', e);
       }
 
-      // 3. Construct URL - Clean short URL if saved to cloud, or compact self-contained hash fallback
+      // ─── STEP 5: Build shareable URL ───
+      // When saved to cloud → clean short URL (no hash, no photos in URL)
+      // When NOT saved to cloud → include compact text-only hash (no base64!)
       let fullShareableUrl = `${window.location.origin}/surprise/${finalId}`;
       if (!isSavedToCloud) {
-        const hashData = encodeSurpriseToHash(fallbackRecord);
+        const hashData = encodeSurpriseToHash({ ...fallbackRecord, photo_urls: [] }); // no photos in hash
         if (hashData) {
           fullShareableUrl += `#s=${encodeURIComponent(hashData)}`;
         }
       }
 
-      setCreatedResult({ id: finalId, link: fullShareableUrl });
+      setCreatedResult({ id: finalId, link: fullShareableUrl, hasCloudPhotos: cloudPhotoUrls.length > 0, hasMp3: !!song });
       onCreated(finalId, fullShareableUrl);
     } catch (err: any) {
       console.error('Submission error:', err);
@@ -657,6 +665,7 @@ export const SurpriseForm: React.FC<SurpriseFormProps> = ({
     setCopiedLink(true);
     setTimeout(() => setCopiedLink(false), 2500);
   };
+
 
   return (
     <div className="w-full max-w-3xl mx-auto my-6 px-4 relative z-10">
@@ -711,7 +720,25 @@ export const SurpriseForm: React.FC<SurpriseFormProps> = ({
                 )}
               </button>
             </div>
+
+            {/* Link length indicator */}
+            <p className={`text-[10px] font-mono ${createdResult.link.length <= 80 ? 'text-emerald-400' : 'text-amber-400'}`}>
+              Link length: {createdResult.link.length} characters {createdResult.link.length <= 80 ? '✓ Short enough for QR & WhatsApp' : '⚠ May be long for some apps'}
+            </p>
           </div>
+
+          {/* Photo & Storage Status */}
+          {createdResult.hasCloudPhotos ? (
+            <div className="p-3.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 text-xs flex items-start gap-2.5">
+              <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+              <span>✅ Photos uploaded to cloud — They will be visible to <strong>{recipientName}</strong> when they open the link on any device!</span>
+            </div>
+          ) : photos.length > 0 ? (
+            <div className="p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs flex items-start gap-2.5">
+              <AlertCircle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+              <span>⚠️ Photos saved locally only. <strong>{recipientName}</strong> may see a default image. To fix: make sure Supabase Storage bucket <code className="bg-black/40 px-1 rounded">photos</code> is set to <strong>Public</strong> in your Supabase dashboard.</span>
+            </div>
+          ) : null}
 
           {/* Actions */}
           <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-2">
@@ -1779,109 +1806,81 @@ export const SurpriseForm: React.FC<SurpriseFormProps> = ({
             </div>
           </div>
 
-          {/* Background Music & Spotify Track Picker */}
+          {/* Background Music & Spotify Section */}
           <div className="space-y-3 p-5 bg-gradient-to-r from-emerald-950/40 via-black/40 to-purple-950/40 rounded-2xl border border-emerald-500/30">
             <div className="flex items-center justify-between">
               <label className="text-xs font-semibold uppercase tracking-widest text-emerald-300 flex items-center gap-1.5 font-mono">
                 <Music className="w-4 h-4 text-emerald-400" />
-                Background Song & Spotify Track Selector 🎧
+                Background Music 🎧
               </label>
-              <span className="text-[10px] text-emerald-300 font-mono bg-emerald-500/20 px-2.5 py-1 rounded-full border border-emerald-500/30 font-semibold">
-                Spotify Ready
-              </span>
+              {/* Spotify ON/OFF Toggle */}
+              <button
+                type="button"
+                onClick={() => setMusicEnabled(!musicEnabled)}
+                className={`px-3 py-1 rounded-full text-xs font-bold font-mono transition-all cursor-pointer ${
+                  musicEnabled
+                    ? 'bg-emerald-500/30 text-emerald-300 border border-emerald-500/50'
+                    : 'bg-white/10 text-white/40 border border-white/10'
+                }`}
+              >
+                {musicEnabled ? 'MUSIC ON 🎵' : 'MUSIC OFF'}
+              </button>
             </div>
 
-            <p className="text-xs text-white/70">
-              Select a popular celebration song preset below, paste any Spotify track URL, or upload a custom MP3 file!
-            </p>
+            {musicEnabled && (
+              <>
+                <p className="text-xs text-white/70">
+                  Select a Spotify preset or paste any Spotify track URL. Music plays automatically when the surprise is opened!
+                </p>
 
-            {/* Spotify Track Presets */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
-              {[
-                { label: '🎂 Happy Birthday Track', url: 'https://open.spotify.com/track/0yPmtIuIsc8bH3I6S2L179' },
-                { label: '💖 Perfect - Ed Sheeran', url: 'https://open.spotify.com/track/0KH3pIAn5u45q77d2I3a4d' },
-                { label: '🌹 A Thousand Years', url: 'https://open.spotify.com/track/6M39B3b90gQ8l9M8S0hUa8' },
-                { label: '✨ Channa Mereya', url: 'https://open.spotify.com/track/0GfL8y8Hh9n4kS10Gg5Q3c' }
-              ].map((preset) => (
-                <button
-                  key={preset.url}
-                  type="button"
-                  onClick={() => {
-                    setSpotifyUrl(preset.url);
-                    if (song) removeSong();
-                  }}
-                  className={`p-2.5 rounded-xl border text-xs font-medium text-left flex items-center justify-between transition-all cursor-pointer ${
-                    spotifyUrl === preset.url
-                      ? 'bg-emerald-500/30 border-emerald-400 text-emerald-100 font-semibold shadow-md'
-                      : 'bg-black/30 border-white/10 text-white/70 hover:text-white hover:border-emerald-500/30'
-                  }`}
-                >
-                  <span>{preset.label}</span>
-                  {spotifyUrl === preset.url && <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />}
-                </button>
-              ))}
-            </div>
+                {/* Spotify Track Presets */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
+                  {[
+                    { label: '🎂 Happy Birthday Song', url: 'https://open.spotify.com/track/0yPmtIuIsc8bH3I6S2L179' },
+                    { label: '💖 Perfect - Ed Sheeran', url: 'https://open.spotify.com/track/0KH3pIAn5u45q77d2I3a4d' },
+                    { label: '🌹 A Thousand Years', url: 'https://open.spotify.com/track/6M39B3b90gQ8l9M8S0hUa8' },
+                    { label: '✨ Tum Hi Ho - Arijit', url: 'https://open.spotify.com/track/3FMY1yQBDsTBFCVfg3M2pb' }
+                  ].map((preset) => (
+                    <button
+                      key={preset.url}
+                      type="button"
+                      onClick={() => { setSpotifyUrl(preset.url); if (song) removeSong(); }}
+                      className={`p-2.5 rounded-xl border text-xs font-medium text-left flex items-center justify-between transition-all cursor-pointer ${
+                        spotifyUrl === preset.url
+                          ? 'bg-emerald-500/30 border-emerald-400 text-emerald-100 font-semibold shadow-md'
+                          : 'bg-black/30 border-white/10 text-white/70 hover:text-white hover:border-emerald-500/30'
+                      }`}
+                    >
+                      <span>{preset.label}</span>
+                      {spotifyUrl === preset.url && <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />}
+                    </button>
+                  ))}
+                </div>
 
-            {/* Custom Spotify URL Input */}
-            <div className="pt-2 space-y-1">
-              <label className="text-[11px] text-emerald-300/80 font-mono">
-                Paste Custom Spotify Track Link or URI:
-              </label>
-              <input
-                type="text"
-                placeholder="e.g. https://open.spotify.com/track/4cOdK2wGLETKBW3PvgPWqT"
-                value={spotifyUrl}
-                onChange={(e) => {
-                  setSpotifyUrl(e.target.value);
-                  if (song) removeSong();
-                }}
-                className="w-full px-3.5 py-2.5 rounded-xl glass-input text-xs text-white placeholder-white/40 focus:outline-none focus:border-emerald-400 font-mono"
-              />
-            </div>
+                {/* Custom Spotify URL Input */}
+                <div className="pt-2 space-y-1">
+                  <label className="text-[11px] text-emerald-300/80 font-mono">Custom Spotify Track URL:</label>
+                  <input
+                    type="text"
+                    placeholder="https://open.spotify.com/track/..."
+                    value={spotifyUrl}
+                    onChange={(e) => { setSpotifyUrl(e.target.value); if (song) removeSong(); }}
+                    className="w-full px-3.5 py-2.5 rounded-xl glass-input text-xs text-white placeholder-white/40 focus:outline-none focus:border-emerald-400 font-mono"
+                  />
+                </div>
 
-            {/* Or Upload Custom MP3 */}
-            <div className="pt-2 border-t border-white/10 space-y-2">
-              <span className="text-[11px] text-white/50 font-mono uppercase tracking-wider block">
-                Or Upload Custom MP3 Audio File
-              </span>
-              {songName ? (
-                <div className="p-3 bg-pink-500/10 border border-pink-500/30 rounded-xl flex items-center justify-between">
-                  <div className="flex items-center gap-2 overflow-hidden">
-                    <Music className="w-4 h-4 text-pink-400 shrink-0" />
-                    <span className="text-xs font-medium text-white truncate">
-                      {songName}
-                    </span>
-                  </div>
+                {/* Clear music button */}
+                {spotifyUrl && (
                   <button
                     type="button"
-                    onClick={removeSong}
-                    className="p-1 text-white/60 hover:text-rose-400 rounded-full transition-colors cursor-pointer"
+                    onClick={() => { setSpotifyUrl(''); removeSong(); }}
+                    className="text-xs text-rose-400 hover:text-rose-300 font-mono flex items-center gap-1 cursor-pointer"
                   >
-                    <Trash2 className="w-4 h-4" />
+                    <Trash2 className="w-3 h-3" /> Remove selected music
                   </button>
-                </div>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setSpotifyUrl('');
-                    songInputRef.current?.click();
-                  }}
-                  className="w-full p-3 rounded-xl border border-dashed border-white/20 hover:border-pink-500/50 bg-black/30 hover:bg-pink-500/10 flex items-center justify-center gap-2 text-white/60 hover:text-pink-300 transition-all cursor-pointer text-xs font-medium"
-                >
-                  <Music className="w-4 h-4" />
-                  <span>Select MP3 background music (Max 10MB)</span>
-                </button>
-              )}
-
-              <input
-                ref={songInputRef}
-                type="file"
-                accept="audio/mp3,audio/mpeg,audio/wav"
-                onChange={handleSongSelect}
-                className="hidden"
-              />
-            </div>
+                )}
+              </>
+            )}
           </div>
 
           {/* Timer Checkbox */}
