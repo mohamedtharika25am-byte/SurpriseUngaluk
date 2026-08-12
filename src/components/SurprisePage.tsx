@@ -74,7 +74,9 @@ export const SurprisePage: React.FC<SurprisePageProps> = ({ id, onNavigateHome }
       if (data.theme_preference) {
         setCurrentTheme(data.theme_preference);
       }
-      if (!data.timer_enabled) {
+      // Preview mode: creator can view instantly without timer
+      const isPreview = new URLSearchParams(window.location.search).get('preview') === 'true';
+      if (isPreview || !data.timer_enabled) {
         setIsUnlocked(true);
       } else {
         const timeRem = calculateTimeRemaining(data.occasion_datetime);
