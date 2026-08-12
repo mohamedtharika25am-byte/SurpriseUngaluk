@@ -85,27 +85,6 @@ export const SurprisePage: React.FC<SurprisePageProps> = ({ id, onNavigateHome }
     };
 
     try {
-      // 0. Check URL hash first (instant self-contained fallback — no network needed)
-      if (window.location.hash) {
-        const hashSurprise = decodeSurpriseFromHash(window.location.hash);
-        if (hashSurprise) {
-          // Merge any cached photos from localStorage since hash won't contain photos
-          try {
-            const localStr = localStorage.getItem(`surprise_${id}`);
-            if (localStr) {
-              const localParsed: Surprise = JSON.parse(localStr);
-              if (localParsed.photo_urls && localParsed.photo_urls.length > 0) {
-                hashSurprise.photo_urls = localParsed.photo_urls;
-              }
-            }
-          } catch (e) {}
-          applySurprise(hashSurprise);
-          try { localStorage.setItem(`surprise_${id}`, JSON.stringify(hashSurprise)); } catch (e) {}
-          setIsLoading(false);
-          return;
-        }
-      }
-
       // 1. Demo surprise fallback
       if (id === 'demo-birthday-surprise' || id === 'demo') {
         const demoData: Surprise = {
@@ -129,7 +108,7 @@ export const SurprisePage: React.FC<SurprisePageProps> = ({ id, onNavigateHome }
         return;
       }
 
-      // 2. Client-side Supabase fetch — PRIMARY source (data is saved here on creation)
+      // 2. Client-side Supabase fetch — PRIMARY source (has real cloud photo URLs)
       if (supabase) {
         try {
           const { data: supaData, error: supaErr } = await supabase
@@ -161,7 +140,28 @@ export const SurprisePage: React.FC<SurprisePageProps> = ({ id, onNavigateHome }
         }
       }
 
-      // 3. Check localStorage (creator's device — has full data with photos)
+      // 3. Check URL hash (self-contained fallback — no network needed)
+      if (window.location.hash) {
+        const hashSurprise = decodeSurpriseFromHash(window.location.hash);
+        if (hashSurprise) {
+          // Merge any cached photos from localStorage since hash won't contain photos
+          try {
+            const localStr = localStorage.getItem(`surprise_${id}`);
+            if (localStr) {
+              const localParsed: Surprise = JSON.parse(localStr);
+              if (localParsed.photo_urls && localParsed.photo_urls.length > 0) {
+                hashSurprise.photo_urls = localParsed.photo_urls;
+              }
+            }
+          } catch (e) {}
+          applySurprise(hashSurprise);
+          try { localStorage.setItem(`surprise_${id}`, JSON.stringify(hashSurprise)); } catch (e) {}
+          setIsLoading(false);
+          return;
+        }
+      }
+
+      // 4. Check localStorage (creator's device — has full data with photos)
       try {
         const localDataStr = localStorage.getItem(`surprise_${id}`) || localStorage.getItem(id);
         if (localDataStr) {
@@ -176,7 +176,7 @@ export const SurprisePage: React.FC<SurprisePageProps> = ({ id, onNavigateHome }
         console.warn('Error reading from localStorage:', e);
       }
 
-      // 4. Server API fetch (secondary fallback)
+      // 5. Server API fetch (secondary fallback)
       try {
         const res = await fetch(`/api/surprise/${id}`);
         const contentType = res.headers.get('content-type');

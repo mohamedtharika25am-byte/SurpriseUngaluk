@@ -102,11 +102,6 @@ export function decodeSurpriseFromHash(hashStr: string): Surprise | null {
     if (parsed) {
       // Minified compact format handling
       if (parsed.r) {
-        const defaultSamplePhotos = [
-          'https://images.unsplash.com/photo-1513151233558-d860c5398176?auto=format&fit=crop&w=800&q=80',
-          'https://images.unsplash.com/photo-1530103862676-de8c9debad1d?auto=format&fit=crop&w=800&q=80'
-        ];
-
         return {
           id: parsed.i || 's_' + Date.now(),
           recipient_name: parsed.r,
@@ -116,8 +111,8 @@ export function decodeSurpriseFromHash(hashStr: string): Surprise | null {
           message: parsed.m || '',
           photo_urls: (parsed.u && Array.isArray(parsed.u) && parsed.u.length > 0)
             ? parsed.u
-            : defaultSamplePhotos,
-          song_url: 'https://cdn.pixabay.com/download/audio/2022/03/15/audio_c8c8a81617.mp3?filename=happy-birthday-110058.mp3',
+            : [],
+          song_url: parsed.su || null,
           timer_enabled: parsed.x !== 0,
           created_at: new Date().toISOString(),
           birth_date: parsed.b || null,
