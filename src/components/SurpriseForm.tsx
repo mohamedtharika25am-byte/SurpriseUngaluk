@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { motion } from 'motion/react';
 import {
   Gift,
@@ -19,7 +19,10 @@ import {
   Loader2,
   Share2,
   CheckCircle2,
-  Wand2
+  Wand2,
+  FileText,
+  Bookmark,
+  RotateCcw
 } from 'lucide-react';
 import {
   OccasionType,
@@ -30,17 +33,24 @@ import {
   TimelineEvent,
   QuizQuestion,
   InsideJoke,
-  ScratchCardItem
+  ScratchCardItem,
+  DraftSurprise
 } from '../types';
 import { encodeSurpriseToHash } from '../lib/urlHashHelper';
 import { supabase } from '../lib/supabase';
-
-
+import {
+  saveDraft,
+  autoSaveActiveDraft,
+  getAutoSaveActiveDraft,
+  clearAutoSaveActiveDraft
+} from '../lib/draftHelper';
 
 interface SurpriseFormProps {
   initialOccasion?: OccasionType;
   onCreated: (id: string, link: string) => void;
   onNavigateToSurprise: (id: string) => void;
+  initialDraft?: DraftSurprise | null;
+  onOpenDraftsModal?: () => void;
 }
 
 const MESSAGE_TEMPLATES = {
@@ -64,7 +74,9 @@ const MESSAGE_TEMPLATES = {
 export const SurpriseForm: React.FC<SurpriseFormProps> = ({
   initialOccasion = 'birthday',
   onCreated,
-  onNavigateToSurprise
+  onNavigateToSurprise,
+  initialDraft,
+  onOpenDraftsModal
 }) => {
   const [recipientName, setRecipientName] = useState('');
   const [partnerName, setPartnerName] = useState('');
@@ -121,6 +133,132 @@ export const SurpriseForm: React.FC<SurpriseFormProps> = ({
 
   const [enableScratchCards, setEnableScratchCards] = useState(false);
   const [scratchCards, setScratchCards] = useState<ScratchCardItem[]>([]);
+
+  // File states
+  const [photos, setPhotos] = useState<File[]>([]);
+  const [photoPreviews, setPhotoPreviews] = useState<string[]>([]);
+
+  // Draft States
+  const [activeDraftId, setActiveDraftId] = useState<string | null>(initialDraft?.id || null);
+  const [draftSavedToast, setDraftSavedToast] = useState<string | null>(null);
+  const [hasAutoSavedDraft, setHasAutoSavedDraft] = useState<boolean>(false);
+  const [autoSavedDraftData, setAutoSavedDraftData] = useState<DraftSurprise | null>(null);
+
+  // Load draft data into form states
+  const loadDraftData = (draft: DraftSurprise) => {
+    setActiveDraftId(draft.id);
+    if (draft.recipient_name) setRecipientName(draft.recipient_name);
+    if (draft.partner_name) setPartnerName(draft.partner_name);
+    if (draft.nickname) setNickname(draft.nickname);
+    if (draft.birth_date) setBirthDate(draft.birth_date);
+    if (draft.occasion_type) setOccasionType(draft.occasion_type);
+    if (draft.occasion_datetime) setOccasionDatetime(draft.occasion_datetime);
+    if (draft.sender_name) setSenderName(draft.sender_name);
+    if (draft.message) setMessage(draft.message);
+    if (typeof draft.timer_enabled === 'boolean') setTimerEnabled(draft.timer_enabled);
+    if (draft.theme_preference) setThemePreference(draft.theme_preference);
+    if (typeof draft.cake_cutting_enabled === 'boolean') setCakeCuttingEnabled(draft.cake_cutting_enabled);
+    if (typeof draft.balloons_game_enabled === 'boolean') setBalloonsGameEnabled(draft.balloons_game_enabled);
+    if (typeof draft.enableBeforeAfter === 'boolean') setEnableBeforeAfter(draft.enableBeforeAfter);
+    if (draft.beforeUrl) setBeforeUrl(draft.beforeUrl);
+    if (draft.afterUrl) setAfterUrl(draft.afterUrl);
+    if (draft.beforeLabel) setBeforeLabel(draft.beforeLabel);
+    if (draft.afterLabel) setAfterLabel(draft.afterLabel);
+    if (draft.spotifyUrl) setSpotifyUrl(draft.spotifyUrl);
+    if (typeof draft.musicEnabled === 'boolean') setMusicEnabled(draft.musicEnabled);
+    if (typeof draft.enableVoiceNote === 'boolean') setEnableVoiceNote(draft.enableVoiceNote);
+    if (draft.voiceNoteUrl) setVoiceNoteUrl(draft.voiceNoteUrl);
+    if (draft.balloonMessages) setBalloonMessages(draft.balloonMessages);
+    if (typeof draft.enableTimeline === 'boolean') setEnableTimeline(draft.enableTimeline);
+    if (draft.timelineEvents) setTimelineEvents(draft.timelineEvents);
+    if (typeof draft.enableQuiz === 'boolean') setEnableQuiz(draft.enableQuiz);
+    if (draft.quizQuestions) setQuizQuestions(draft.quizQuestions);
+    if (typeof draft.enableInsideJokes === 'boolean') setEnableInsideJokes(draft.enableInsideJokes);
+    if (draft.insideJokes) setInsideJokes(draft.insideJokes);
+    if (typeof draft.enableHiddenMessages === 'boolean') setEnableHiddenMessages(draft.enableHiddenMessages);
+    if (draft.hiddenMessages) setHiddenMessages(draft.hiddenMessages);
+    if (typeof draft.enableScratchCards === 'boolean') setEnableScratchCards(draft.enableScratchCards);
+    if (draft.scratchCards) setScratchCards(draft.scratchCards);
+    if (draft.photoPreviews && draft.photoPreviews.length > 0) {
+      setPhotoPreviews(draft.photoPreviews);
+    }
+  };
+
+  // Check for auto-saved draft on mount or when initialDraft changes
+  useEffect(() => {
+    if (initialDraft) {
+      loadDraftData(initialDraft);
+    } else {
+      const autoDraft = getAutoSaveActiveDraft();
+      if (autoDraft) {
+        setHasAutoSavedDraft(true);
+        setAutoSavedDraftData(autoDraft);
+      }
+    }
+  }, [initialDraft]);
+
+  const getCurrentDraftObject = () => {
+    return {
+      recipient_name: recipientName,
+      partner_name: partnerName,
+      nickname: nickname,
+      birth_date: birthDate,
+      occasion_type: occasionType,
+      occasion_datetime: occasionDatetime,
+      sender_name: senderName,
+      message: message,
+      timer_enabled: timerEnabled,
+      theme_preference: themePreference,
+      cake_cutting_enabled: cakeCuttingEnabled,
+      balloons_game_enabled: balloonsGameEnabled,
+      enableBeforeAfter: enableBeforeAfter,
+      beforeUrl: beforeUrl,
+      afterUrl: afterUrl,
+      beforeLabel: beforeLabel,
+      afterLabel: afterLabel,
+      spotifyUrl: spotifyUrl,
+      musicEnabled: musicEnabled,
+      enableVoiceNote: enableVoiceNote,
+      voiceNoteUrl: voiceNoteUrl,
+      balloonMessages: balloonMessages,
+      enableTimeline: enableTimeline,
+      timelineEvents: timelineEvents,
+      enableQuiz: enableQuiz,
+      quizQuestions: quizQuestions,
+      enableInsideJokes: enableInsideJokes,
+      insideJokes: insideJokes,
+      enableHiddenMessages: enableHiddenMessages,
+      hiddenMessages: hiddenMessages,
+      enableScratchCards: enableScratchCards,
+      scratchCards: scratchCards,
+      photoPreviews: photoPreviews
+    };
+  };
+
+  // Auto-save on form state changes (debounced ~1s)
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      autoSaveActiveDraft(getCurrentDraftObject());
+    }, 1000);
+    return () => clearTimeout(timer);
+  }, [
+    recipientName, partnerName, nickname, birthDate, occasionType, occasionDatetime,
+    senderName, message, timerEnabled, themePreference, cakeCuttingEnabled, balloonsGameEnabled,
+    enableBeforeAfter, beforeUrl, afterUrl, beforeLabel, afterLabel, spotifyUrl, musicEnabled,
+    enableVoiceNote, voiceNoteUrl, balloonMessages, enableTimeline, timelineEvents,
+    enableQuiz, quizQuestions, enableInsideJokes, insideJokes, enableHiddenMessages,
+    hiddenMessages, enableScratchCards, scratchCards, photoPreviews
+  ]);
+
+  const handleManualSaveDraft = () => {
+    const saved = saveDraft({
+      ...getCurrentDraftObject(),
+      id: activeDraftId || undefined
+    });
+    setActiveDraftId(saved.id);
+    setDraftSavedToast('Draft saved successfully! You can view it under "My Drafts".');
+    setTimeout(() => setDraftSavedToast(null), 3500);
+  };
 
   // Auto-Fill sample interactive pack
   const fillSampleInteractiveData = () => {
@@ -200,9 +338,7 @@ export const SurpriseForm: React.FC<SurpriseFormProps> = ({
   };
 
 
-  // File states
-  const [photos, setPhotos] = useState<File[]>([]);
-  const [photoPreviews, setPhotoPreviews] = useState<string[]>([]);
+  // Other file states
   const [song, setSong] = useState<File | null>(null);
   const [songName, setSongName] = useState<string>('');
   const [songPreviewUrl, setSongPreviewUrl] = useState<string | null>(null);
@@ -694,6 +830,7 @@ export const SurpriseForm: React.FC<SurpriseFormProps> = ({
         }
       }
 
+      clearAutoSaveActiveDraft();
       setCreatedResult({ id: finalId, link: fullShareableUrl, hasCloudPhotos: cloudPhotoUrls.length > 0, hasMp3: !!song });
       onCreated(finalId, fullShareableUrl);
     } catch (err: any) {
@@ -823,18 +960,104 @@ export const SurpriseForm: React.FC<SurpriseFormProps> = ({
           className="glass-card p-6 sm:p-10 rounded-3xl glow-pink border border-white/10 space-y-8"
         >
           {/* Header */}
-          <div className="border-b border-white/10 pb-5">
-            <div className="inline-block px-3 py-1 rounded-full border border-pink-500/30 bg-pink-500/10 text-pink-400 text-[10px] uppercase tracking-[0.2em] font-semibold mb-2">
-              <Sparkles className="w-3.5 h-3.5 inline mr-1" />
-              Personalized Surprise Maker
+          <div className="border-b border-white/10 pb-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div>
+              <div className="inline-block px-3 py-1 rounded-full border border-pink-500/30 bg-pink-500/10 text-pink-400 text-[10px] uppercase tracking-[0.2em] font-semibold mb-2">
+                <Sparkles className="w-3.5 h-3.5 inline mr-1" />
+                Personalized Surprise Maker
+              </div>
+              <h2 className="text-2xl sm:text-4xl font-serif text-white tracking-tight">
+                Create Your Surprise Link
+              </h2>
+              <p className="text-xs sm:text-sm text-white/60 font-light mt-1">
+                Fill in the details below to generate a custom digital surprise page with timer, music, and photos.
+              </p>
             </div>
-            <h2 className="text-2xl sm:text-4xl font-serif text-white tracking-tight">
-              Create Your Surprise Link
-            </h2>
-            <p className="text-xs sm:text-sm text-white/60 font-light mt-1">
-              Fill in the details below to generate a beautiful digital surprise page with custom timer, music, and photos.
-            </p>
+
+            {/* Draft Controls Toolbar */}
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                type="button"
+                onClick={handleManualSaveDraft}
+                className="px-4 py-2 rounded-xl bg-pink-500/10 hover:bg-pink-500/20 border border-pink-500/30 text-pink-300 text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer shadow-sm hover:scale-[1.02] active:scale-95"
+                title="Save current progress as draft"
+              >
+                <Bookmark className="w-3.5 h-3.5 text-pink-400" />
+                <span>Save Draft</span>
+              </button>
+
+              {onOpenDraftsModal && (
+                <button
+                  type="button"
+                  onClick={onOpenDraftsModal}
+                  className="px-4 py-2 rounded-xl border border-white/20 hover:bg-white/10 text-white text-xs font-medium flex items-center gap-1.5 transition-colors cursor-pointer"
+                  title="View all saved drafts"
+                >
+                  <FileText className="w-3.5 h-3.5 text-pink-400" />
+                  <span>My Drafts</span>
+                </button>
+              )}
+            </div>
           </div>
+
+          {/* Draft Saved Toast Notification */}
+          {draftSavedToast && (
+            <motion.div
+              initial={{ opacity: 0, y: -5 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="p-3.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 text-xs flex items-center justify-between gap-2"
+            >
+              <div className="flex items-center gap-2">
+                <Check className="w-4 h-4 text-emerald-400" />
+                <span>{draftSavedToast}</span>
+              </div>
+            </motion.div>
+          )}
+
+          {/* Unsaved Auto-Draft Prompt Banner */}
+          {hasAutoSavedDraft && autoSavedDraftData && (
+            <motion.div
+              initial={{ opacity: 0, y: -5 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="p-4 rounded-2xl bg-gradient-to-r from-purple-900/40 to-pink-900/40 border border-pink-500/30 text-white flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-lg"
+            >
+              <div className="flex items-start gap-2.5">
+                <RotateCcw className="w-5 h-5 text-pink-400 shrink-0 mt-0.5" />
+                <div>
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-pink-300">
+                    Unsaved Draft Detected from Previous Session
+                  </h4>
+                  <p className="text-xs text-white/70 font-light mt-0.5">
+                    For <strong>{autoSavedDraftData.recipient_name || 'Recipient'}</strong> ({autoSavedDraftData.occasion_type}). Would you like to restore your progress?
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 self-end sm:self-center shrink-0">
+                <button
+                  type="button"
+                  onClick={() => {
+                    loadDraftData(autoSavedDraftData);
+                    setHasAutoSavedDraft(false);
+                  }}
+                  className="px-3.5 py-1.5 rounded-xl bg-pink-600 hover:bg-pink-500 text-white text-xs font-semibold flex items-center gap-1 shadow-md transition-transform active:scale-95 cursor-pointer"
+                >
+                  <RotateCcw className="w-3.5 h-3.5" />
+                  <span>Restore Draft</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    clearAutoSaveActiveDraft();
+                    setHasAutoSavedDraft(false);
+                  }}
+                  className="px-3 py-1.5 rounded-xl border border-white/20 hover:bg-white/10 text-white/70 text-xs font-medium transition-colors cursor-pointer"
+                >
+                  Discard
+                </button>
+              </div>
+            </motion.div>
+          )}
 
           {/* Error Banner */}
           {errorMsg && (

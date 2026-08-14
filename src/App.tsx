@@ -4,12 +4,16 @@ import HomePage from './components/HomePage';
 import SurpriseForm from './components/SurpriseForm';
 import SurprisePage from './components/SurprisePage';
 import SupabaseInstructionsModal from './components/SupabaseInstructionsModal';
+import MyDraftsModal from './components/MyDraftsModal';
+import { DraftSurprise } from './types';
 
 export function App() {
   const [currentPath, setCurrentPath] = useState<string>(() => {
     return window.location.pathname || '/';
   });
   const [showSupabaseGuide, setShowSupabaseGuide] = useState<boolean>(false);
+  const [showDraftsModal, setShowDraftsModal] = useState<boolean>(false);
+  const [selectedDraft, setSelectedDraft] = useState<DraftSurprise | null>(null);
 
   useEffect(() => {
     const handlePopState = () => {
@@ -45,6 +49,8 @@ export function App() {
       return (
         <SurpriseForm
           initialOccasion={initialOccasion}
+          initialDraft={selectedDraft}
+          onOpenDraftsModal={() => setShowDraftsModal(true)}
           onCreated={(id, link) => {
             console.log('Surprise created:', id, link);
           }}
@@ -76,6 +82,7 @@ export function App() {
           onNavigate={navigateTo}
           currentRoute={currentPath}
           onOpenSupabaseGuide={() => setShowSupabaseGuide(true)}
+          onOpenDrafts={() => setShowDraftsModal(true)}
         />
         <main>{renderContent()}</main>
       </div>
@@ -98,6 +105,16 @@ export function App() {
       <SupabaseInstructionsModal
         isOpen={showSupabaseGuide}
         onClose={() => setShowSupabaseGuide(false)}
+      />
+
+      {/* My Drafts Modal */}
+      <MyDraftsModal
+        isOpen={showDraftsModal}
+        onClose={() => setShowDraftsModal(false)}
+        onSelectDraft={(draft) => {
+          setSelectedDraft(draft);
+          navigateTo('/create');
+        }}
       />
     </div>
   );

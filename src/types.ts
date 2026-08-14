@@ -102,3 +102,43 @@ export interface ApiCreateSurpriseResponse {
   storageMode?: 'supabase' | 'fallback';
 }
 
+export interface DraftSurprise {
+  id: string;
+  updated_at: string;
+  title?: string;
+  recipient_name: string;
+  partner_name?: string;
+  nickname?: string;
+  birth_date?: string;
+  occasion_type: OccasionType;
+  occasion_datetime: string;
+  sender_name: string;
+  message: string;
+  timer_enabled: boolean;
+  theme_preference: ThemeType;
+  cake_cutting_enabled: boolean;
+  balloons_game_enabled: boolean;
+  enableBeforeAfter: boolean;
+  beforeUrl: string;
+  afterUrl: string;
+  beforeLabel: string;
+  afterLabel: string;
+  spotifyUrl: string;
+  musicEnabled: boolean;
+  enableVoiceNote: boolean;
+  voiceNoteUrl: string;
+  balloonMessages: string[];
+  enableTimeline: boolean;
+  timelineEvents: TimelineEvent[];
+  enableQuiz: boolean;
+  quizQuestions: QuizQuestion[];
+  enableInsideJokes: boolean;
+  insideJokes: InsideJoke[];
+  enableHiddenMessages: boolean;
+  hiddenMessages: string[];
+  enableScratchCards: boolean;
+  scratchCards: ScratchCardItem[];
+  photoPreviews: string[];
+}
+
+

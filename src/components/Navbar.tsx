@@ -1,22 +1,33 @@
 import React, { useState, useEffect } from 'react';
-import { Gift, PlusCircle, Database, Sparkles, HelpCircle } from 'lucide-react';
+import { Gift, PlusCircle, Database, Sparkles, HelpCircle, FileText } from 'lucide-react';
 import { isSupabaseConfigured } from '../lib/supabase';
+import { getAllDrafts } from '../lib/draftHelper';
 
 interface NavbarProps {
   onNavigate: (route: string) => void;
   currentRoute: string;
   onOpenSupabaseGuide?: () => void;
+  onOpenDrafts?: () => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
   onNavigate,
   currentRoute,
-  onOpenSupabaseGuide
+  onOpenSupabaseGuide,
+  onOpenDrafts
 }) => {
   const [dbConnected, setDbConnected] = useState<boolean>(false);
+  const [draftCount, setDraftCount] = useState<number>(0);
 
   useEffect(() => {
     setDbConnected(isSupabaseConfigured());
+    setDraftCount(getAllDrafts().length);
+
+    // Listen for storage events or updates
+    const handleStorageChange = () => {
+      setDraftCount(getAllDrafts().length);
+    };
+    window.addEventListener('storage', handleStorageChange);
 
     // Also ping server endpoint for live check
     fetch('/api/supabase-status')
@@ -74,6 +85,23 @@ export const Navbar: React.FC<NavbarProps> = ({
             <span>{dbConnected ? 'Supabase Connected' : 'Demo Storage Active'}</span>
             <HelpCircle className="w-3 h-3 text-white/40 ml-0.5" />
           </button>
+
+          {/* My Drafts button */}
+          {onOpenDrafts && (
+            <button
+              onClick={onOpenDrafts}
+              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full border border-white/20 hover:border-pink-500/40 text-white/90 hover:text-white hover:bg-white/10 text-xs font-medium transition-colors cursor-pointer"
+              title="View saved drafts"
+            >
+              <FileText className="w-3.5 h-3.5 text-pink-400" />
+              <span>Drafts</span>
+              {draftCount > 0 && (
+                <span className="px-1.5 py-0.2 rounded-full bg-pink-500 text-white font-bold text-[10px] shadow-sm">
+                  {draftCount}
+                </span>
+              )}
+            </button>
+          )}
 
           {currentRoute !== '/create' && (
             <button
