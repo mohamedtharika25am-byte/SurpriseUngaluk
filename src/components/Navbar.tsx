@@ -43,9 +43,11 @@ export const Navbar: React.FC<NavbarProps> = ({
           onClick={() => onNavigate('/')}
           className="flex items-center gap-2.5 cursor-pointer group"
         >
-          <div className="w-8 h-8 rounded-lg bg-gradient-to-tr from-pink-500 to-violet-600 flex items-center justify-center shadow-md shadow-pink-500/30 group-hover:scale-105 transition-transform">
-            <span className="text-white font-bold text-xs tracking-wider">S</span>
-          </div>
+          <img
+            src="/logo.png"
+            alt="SurpriseUngalukku Logo"
+            className="w-9 h-9 object-contain rounded-lg group-hover:scale-105 transition-transform drop-shadow-md"
+          />
           <div className="flex items-center gap-2">
             <span className="font-serif font-bold text-lg tracking-tight text-white group-hover:text-pink-300 transition-colors">
               SurpriseUngalukku
