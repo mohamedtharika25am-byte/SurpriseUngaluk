@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { motion } from 'motion/react';
 import {
   Gift,
@@ -143,59 +143,65 @@ export const SurpriseForm: React.FC<SurpriseFormProps> = ({
   const [draftSavedToast, setDraftSavedToast] = useState<string | null>(null);
   const [hasAutoSavedDraft, setHasAutoSavedDraft] = useState<boolean>(false);
   const [autoSavedDraftData, setAutoSavedDraftData] = useState<DraftSurprise | null>(null);
+  const lastLoadedDraftIdRef = useRef<string | null>(null);
 
   // Load draft data into form states
-  const loadDraftData = (draft: DraftSurprise) => {
+  const loadDraftData = useCallback((draft: DraftSurprise) => {
     setActiveDraftId(draft.id);
-    if (draft.recipient_name) setRecipientName(draft.recipient_name);
-    if (draft.partner_name) setPartnerName(draft.partner_name);
-    if (draft.nickname) setNickname(draft.nickname);
-    if (draft.birth_date) setBirthDate(draft.birth_date);
-    if (draft.occasion_type) setOccasionType(draft.occasion_type);
-    if (draft.occasion_datetime) setOccasionDatetime(draft.occasion_datetime);
-    if (draft.sender_name) setSenderName(draft.sender_name);
-    if (draft.message) setMessage(draft.message);
-    if (typeof draft.timer_enabled === 'boolean') setTimerEnabled(draft.timer_enabled);
-    if (draft.theme_preference) setThemePreference(draft.theme_preference);
-    if (typeof draft.cake_cutting_enabled === 'boolean') setCakeCuttingEnabled(draft.cake_cutting_enabled);
-    if (typeof draft.balloons_game_enabled === 'boolean') setBalloonsGameEnabled(draft.balloons_game_enabled);
-    if (typeof draft.enableBeforeAfter === 'boolean') setEnableBeforeAfter(draft.enableBeforeAfter);
-    if (draft.beforeUrl) setBeforeUrl(draft.beforeUrl);
-    if (draft.afterUrl) setAfterUrl(draft.afterUrl);
-    if (draft.beforeLabel) setBeforeLabel(draft.beforeLabel);
-    if (draft.afterLabel) setAfterLabel(draft.afterLabel);
-    if (draft.spotifyUrl) setSpotifyUrl(draft.spotifyUrl);
-    if (typeof draft.musicEnabled === 'boolean') setMusicEnabled(draft.musicEnabled);
-    if (typeof draft.enableVoiceNote === 'boolean') setEnableVoiceNote(draft.enableVoiceNote);
-    if (draft.voiceNoteUrl) setVoiceNoteUrl(draft.voiceNoteUrl);
-    if (draft.balloonMessages) setBalloonMessages(draft.balloonMessages);
-    if (typeof draft.enableTimeline === 'boolean') setEnableTimeline(draft.enableTimeline);
-    if (draft.timelineEvents) setTimelineEvents(draft.timelineEvents);
-    if (typeof draft.enableQuiz === 'boolean') setEnableQuiz(draft.enableQuiz);
-    if (draft.quizQuestions) setQuizQuestions(draft.quizQuestions);
-    if (typeof draft.enableInsideJokes === 'boolean') setEnableInsideJokes(draft.enableInsideJokes);
-    if (draft.insideJokes) setInsideJokes(draft.insideJokes);
-    if (typeof draft.enableHiddenMessages === 'boolean') setEnableHiddenMessages(draft.enableHiddenMessages);
-    if (draft.hiddenMessages) setHiddenMessages(draft.hiddenMessages);
-    if (typeof draft.enableScratchCards === 'boolean') setEnableScratchCards(draft.enableScratchCards);
-    if (draft.scratchCards) setScratchCards(draft.scratchCards);
-    if (draft.photoPreviews && draft.photoPreviews.length > 0) {
-      setPhotoPreviews(draft.photoPreviews);
-    }
-  };
+    setRecipientName(draft.recipient_name || '');
+    setPartnerName(draft.partner_name || '');
+    setNickname(draft.nickname || '');
+    setBirthDate(draft.birth_date || '');
+    setOccasionType(draft.occasion_type || 'birthday');
+    setOccasionDatetime(draft.occasion_datetime || getDefaultDatetime());
+    setSenderName(draft.sender_name || '');
+    setMessage(draft.message || '');
+    setTimerEnabled(typeof draft.timer_enabled === 'boolean' ? draft.timer_enabled : true);
+    setThemePreference(draft.theme_preference || 'midnight');
+    setCakeCuttingEnabled(typeof draft.cake_cutting_enabled === 'boolean' ? draft.cake_cutting_enabled : true);
+    setBalloonsGameEnabled(typeof draft.balloons_game_enabled === 'boolean' ? draft.balloons_game_enabled : false);
+    setEnableBeforeAfter(typeof draft.enableBeforeAfter === 'boolean' ? draft.enableBeforeAfter : false);
+    setBeforeUrl(draft.beforeUrl || '');
+    setAfterUrl(draft.afterUrl || '');
+    setBeforeLabel(draft.beforeLabel || 'Childhood / Back Then 👶');
+    setAfterLabel(draft.afterLabel || 'Grown Up / Stunning Today ✨');
+    setSpotifyUrl(draft.spotifyUrl || '');
+    setMusicEnabled(typeof draft.musicEnabled === 'boolean' ? draft.musicEnabled : true);
+    setEnableVoiceNote(typeof draft.enableVoiceNote === 'boolean' ? draft.enableVoiceNote : false);
+    setVoiceNoteUrl(draft.voiceNoteUrl || '');
+    setBalloonMessages(draft.balloonMessages || []);
+    setEnableTimeline(typeof draft.enableTimeline === 'boolean' ? draft.enableTimeline : false);
+    setTimelineEvents(draft.timelineEvents || []);
+    setEnableQuiz(typeof draft.enableQuiz === 'boolean' ? draft.enableQuiz : false);
+    setQuizQuestions(draft.quizQuestions || []);
+    setEnableInsideJokes(typeof draft.enableInsideJokes === 'boolean' ? draft.enableInsideJokes : false);
+    setInsideJokes(draft.insideJokes || []);
+    setEnableHiddenMessages(typeof draft.enableHiddenMessages === 'boolean' ? draft.enableHiddenMessages : false);
+    setHiddenMessages(draft.hiddenMessages || []);
+    setEnableScratchCards(typeof draft.enableScratchCards === 'boolean' ? draft.enableScratchCards : false);
+    setScratchCards(draft.scratchCards || []);
+    setPhotoPreviews(draft.photoPreviews || []);
+  }, []);
 
   // Check for auto-saved draft on mount or when initialDraft changes
   useEffect(() => {
     if (initialDraft) {
-      loadDraftData(initialDraft);
+      if (lastLoadedDraftIdRef.current !== initialDraft.id) {
+        lastLoadedDraftIdRef.current = initialDraft.id;
+        loadDraftData(initialDraft);
+      }
     } else {
+      if (lastLoadedDraftIdRef.current !== null) {
+        lastLoadedDraftIdRef.current = null;
+        setActiveDraftId(null);
+      }
       const autoDraft = getAutoSaveActiveDraft();
       if (autoDraft) {
         setHasAutoSavedDraft(true);
         setAutoSavedDraftData(autoDraft);
       }
     }
-  }, [initialDraft]);
+  }, [initialDraft, loadDraftData]);
 
   const getCurrentDraftObject = () => {
     return {
