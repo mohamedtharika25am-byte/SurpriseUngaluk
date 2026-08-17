@@ -15,7 +15,12 @@ import {
   Loader2,
   Volume2,
   Clock,
-  Eye
+  Eye,
+  Pencil,
+  Save,
+  X,
+  ChevronDown,
+  ChevronUp
 } from 'lucide-react';
 import { Surprise, ThemeType } from '../types';
 import { decodeSurpriseFromHash } from '../lib/urlHashHelper';
@@ -60,6 +65,17 @@ export const SurprisePage: React.FC<SurprisePageProps> = ({ id, onNavigateHome }
   const [currentTheme, setCurrentTheme] = useState<ThemeType>('midnight');
   const [cakeCutDone, setCakeCutDone] = useState<boolean>(false);
 
+  // Creator detection & edit panel states
+  const [isCreator, setIsCreator] = useState<boolean>(false);
+  const [isEditPanelOpen, setIsEditPanelOpen] = useState<boolean>(false);
+  const [editRecipientName, setEditRecipientName] = useState<string>('');
+  const [editSenderName, setEditSenderName] = useState<string>('');
+  const [editMessage, setEditMessage] = useState<string>('');
+  const [editNickname, setEditNickname] = useState<string>('');
+  const [editPartnerName, setEditPartnerName] = useState<string>('');
+  const [editSaving, setEditSaving] = useState<boolean>(false);
+  const [editSavedToast, setEditSavedToast] = useState<string | null>(null);
+
   useEffect(() => {
     fetchSurprise();
   }, [id]);
@@ -84,6 +100,28 @@ export const SurprisePage: React.FC<SurprisePageProps> = ({ id, onNavigateHome }
           setIsUnlocked(true);
         }
       }
+
+      // Populate edit fields
+      setEditRecipientName(data.recipient_name || '');
+      setEditSenderName(data.sender_name || '');
+      setEditMessage(data.message || '');
+      setEditNickname(data.nickname || '');
+      setEditPartnerName(data.partner_name || '');
+    };
+
+    // Detect if user is the creator by checking localStorage
+    const detectCreator = () => {
+      try {
+        const localStr = localStorage.getItem(`surprise_${id}`);
+        if (localStr) {
+          const parsed = JSON.parse(localStr);
+          if (parsed && parsed.id) {
+            setIsCreator(true);
+          }
+        }
+      } catch (e) {
+        // Not the creator
+      }
     };
 
     try {
@@ -106,6 +144,7 @@ export const SurprisePage: React.FC<SurprisePageProps> = ({ id, onNavigateHome }
           created_at: new Date().toISOString()
         };
         applySurprise(demoData);
+        detectCreator();
         setIsLoading(false);
         return;
       }
@@ -133,6 +172,7 @@ export const SurprisePage: React.FC<SurprisePageProps> = ({ id, onNavigateHome }
               }
             } catch (e) {}
             applySurprise(finalData);
+            detectCreator();
             try { localStorage.setItem(`surprise_${id}`, JSON.stringify(finalData)); } catch (e) {}
             setIsLoading(false);
             return;
@@ -157,6 +197,7 @@ export const SurprisePage: React.FC<SurprisePageProps> = ({ id, onNavigateHome }
             }
           } catch (e) {}
           applySurprise(hashSurprise);
+          detectCreator();
           try { localStorage.setItem(`surprise_${id}`, JSON.stringify(hashSurprise)); } catch (e) {}
           setIsLoading(false);
           return;
@@ -170,6 +211,7 @@ export const SurprisePage: React.FC<SurprisePageProps> = ({ id, onNavigateHome }
           const parsed: Surprise = JSON.parse(localDataStr);
           if (parsed && parsed.id) {
             applySurprise(parsed);
+            detectCreator();
             setIsLoading(false);
             return;
           }
@@ -186,6 +228,7 @@ export const SurprisePage: React.FC<SurprisePageProps> = ({ id, onNavigateHome }
           const data = await res.json();
           if (data && data.success && data.surprise) {
             applySurprise(data.surprise);
+            detectCreator();
             try { localStorage.setItem(`surprise_${id}`, JSON.stringify(data.surprise)); } catch (e) {}
             setIsLoading(false);
             return;
@@ -236,6 +279,52 @@ export const SurprisePage: React.FC<SurprisePageProps> = ({ id, onNavigateHome }
     navigator.clipboard.writeText(window.location.href);
     setCopiedLink(true);
     setTimeout(() => setCopiedLink(false), 2000);
+  };
+
+  // Save edited surprise data
+  const handleSaveEdits = async () => {
+    if (!surprise) return;
+    setEditSaving(true);
+
+    const updatedSurprise: Surprise = {
+      ...surprise,
+      recipient_name: editRecipientName.trim() || surprise.recipient_name,
+      sender_name: editSenderName.trim() || surprise.sender_name,
+      message: editMessage.trim() || surprise.message,
+      nickname: editNickname.trim() || null,
+      partner_name: editPartnerName.trim() || null,
+    };
+
+    // Update localStorage
+    try {
+      localStorage.setItem(`surprise_${id}`, JSON.stringify(updatedSurprise));
+    } catch (e) {
+      console.warn('Failed to save edits to localStorage:', e);
+    }
+
+    // Update Supabase if connected
+    if (supabase) {
+      try {
+        await supabase
+          .from('surprises')
+          .update({
+            recipient_name: updatedSurprise.recipient_name,
+            sender_name: updatedSurprise.sender_name,
+            message: updatedSurprise.message,
+            nickname: updatedSurprise.nickname,
+            partner_name: updatedSurprise.partner_name,
+          })
+          .eq('id', id);
+      } catch (e) {
+        console.warn('Supabase update failed:', e);
+      }
+    }
+
+    setSurprise(updatedSurprise);
+    setEditSaving(false);
+    setIsEditPanelOpen(false);
+    setEditSavedToast('Changes saved successfully! ✅');
+    setTimeout(() => setEditSavedToast(null), 3000);
   };
 
   const getOccasionIcon = (type: string) => {
@@ -399,17 +488,19 @@ export const SurprisePage: React.FC<SurprisePageProps> = ({ id, onNavigateHome }
               <Clock className="w-5 h-5 text-amber-400 shrink-0" />
               <span>{earlyAlertMessage}</span>
             </div>
-            <button
-              onClick={() => {
-                setIsUnlocked(true);
-                setEarlyAlertMessage(null);
-                setTriggerConfetti(true);
-              }}
-              className="px-3.5 py-1.5 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-200 text-xs font-mono border border-amber-500/40 transition-colors cursor-pointer flex items-center gap-1.5"
-            >
-              <Eye className="w-3.5 h-3.5 text-amber-300" />
-              <span>Creator Test: Unlock Now 👁️</span>
-            </button>
+            {isCreator && (
+              <button
+                onClick={() => {
+                  setIsUnlocked(true);
+                  setEarlyAlertMessage(null);
+                  setTriggerConfetti(true);
+                }}
+                className="px-3.5 py-1.5 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-200 text-xs font-mono border border-amber-500/40 transition-colors cursor-pointer flex items-center gap-1.5"
+              >
+                <Eye className="w-3.5 h-3.5 text-amber-300" />
+                <span>Creator Test: Unlock Now 👁️</span>
+              </button>
+            )}
           </motion.div>
         )}
       </AnimatePresence>
@@ -433,18 +524,20 @@ export const SurprisePage: React.FC<SurprisePageProps> = ({ id, onNavigateHome }
             Click to reveal your personal greeting card, photo wall, and music!
           </p>
 
-          <div className="pt-2">
-            <button
-              onClick={() => {
-                setIsUnlocked(true);
-                setTriggerConfetti(true);
-              }}
-              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full bg-pink-500/10 hover:bg-pink-500/20 border border-pink-500/30 text-pink-300 hover:text-white text-xs font-mono transition-all hover:scale-105 active:scale-95 cursor-pointer"
-            >
-              <Eye className="w-3.5 h-3.5 text-pink-400" />
-              <span>Creator Test Mode: Instant Unlock & Inspect Content 👁️</span>
-            </button>
-          </div>
+          {isCreator && (
+            <div className="pt-2">
+              <button
+                onClick={() => {
+                  setIsUnlocked(true);
+                  setTriggerConfetti(true);
+                }}
+                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full bg-pink-500/10 hover:bg-pink-500/20 border border-pink-500/30 text-pink-300 hover:text-white text-xs font-mono transition-all hover:scale-105 active:scale-95 cursor-pointer"
+              >
+                <Eye className="w-3.5 h-3.5 text-pink-400" />
+                <span>Creator Test Mode: Instant Unlock & Inspect Content 👁️</span>
+              </button>
+            </div>
+          )}
         </motion.div>
       )}
 
@@ -462,6 +555,159 @@ export const SurprisePage: React.FC<SurprisePageProps> = ({ id, onNavigateHome }
               <Unlock className="w-4 h-4 text-emerald-400" />
               <span>Surprise Unlocked! Happy Celebration! 🎉</span>
             </div>
+
+            {/* Edit Saved Toast */}
+            <AnimatePresence>
+              {editSavedToast && (
+                <motion.div
+                  initial={{ opacity: 0, y: -10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -10 }}
+                  className="p-3 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 text-xs font-medium text-center"
+                >
+                  <div className="flex items-center justify-center gap-2">
+                    <Check className="w-4 h-4 text-emerald-400" />
+                    <span>{editSavedToast}</span>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+
+            {/* Creator Edit Panel — only visible to the creator */}
+            {isCreator && (
+              <motion.div
+                initial={{ opacity: 0, y: -5 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="rounded-2xl border border-pink-500/30 bg-gradient-to-r from-pink-950/60 to-violet-950/60 overflow-hidden"
+              >
+                {/* Toggle Header */}
+                <button
+                  onClick={() => setIsEditPanelOpen(!isEditPanelOpen)}
+                  className="w-full flex items-center justify-between px-5 py-3 text-left cursor-pointer hover:bg-white/5 transition-colors"
+                >
+                  <div className="flex items-center gap-2">
+                    <Pencil className="w-4 h-4 text-pink-400" />
+                    <span className="text-xs font-bold uppercase tracking-wider text-pink-300">Creator Edit Panel</span>
+                    <span className="text-[10px] text-white/40 font-mono">(Only you can see this)</span>
+                  </div>
+                  {isEditPanelOpen ? (
+                    <ChevronUp className="w-4 h-4 text-white/50" />
+                  ) : (
+                    <ChevronDown className="w-4 h-4 text-white/50" />
+                  )}
+                </button>
+
+                {/* Collapsible Edit Fields */}
+                <AnimatePresence>
+                  {isEditPanelOpen && (
+                    <motion.div
+                      initial={{ height: 0, opacity: 0 }}
+                      animate={{ height: 'auto', opacity: 1 }}
+                      exit={{ height: 0, opacity: 0 }}
+                      transition={{ duration: 0.25 }}
+                      className="overflow-hidden"
+                    >
+                      <div className="px-5 pb-5 space-y-4 border-t border-white/10 pt-4">
+                        {/* Recipient Name */}
+                        <div className="space-y-1">
+                          <label className="text-[10px] text-white/50 uppercase tracking-widest font-mono">Recipient Name</label>
+                          <input
+                            type="text"
+                            value={editRecipientName}
+                            onChange={(e) => setEditRecipientName(e.target.value)}
+                            className="w-full px-3 py-2 rounded-lg bg-black/40 border border-white/15 text-white text-sm focus:outline-none focus:border-pink-500/50 focus:ring-1 focus:ring-pink-500/30 transition-colors placeholder:text-white/25"
+                            placeholder="Enter recipient name"
+                          />
+                        </div>
+
+                        {/* Sender Name */}
+                        <div className="space-y-1">
+                          <label className="text-[10px] text-white/50 uppercase tracking-widest font-mono">Sender Name</label>
+                          <input
+                            type="text"
+                            value={editSenderName}
+                            onChange={(e) => setEditSenderName(e.target.value)}
+                            className="w-full px-3 py-2 rounded-lg bg-black/40 border border-white/15 text-white text-sm focus:outline-none focus:border-pink-500/50 focus:ring-1 focus:ring-pink-500/30 transition-colors placeholder:text-white/25"
+                            placeholder="Enter sender name"
+                          />
+                        </div>
+
+                        {/* Nickname */}
+                        {(surprise.occasion_type === 'birthday' || editNickname) && (
+                          <div className="space-y-1">
+                            <label className="text-[10px] text-white/50 uppercase tracking-widest font-mono">Nickname (optional)</label>
+                            <input
+                              type="text"
+                              value={editNickname}
+                              onChange={(e) => setEditNickname(e.target.value)}
+                              className="w-full px-3 py-2 rounded-lg bg-black/40 border border-white/15 text-white text-sm focus:outline-none focus:border-pink-500/50 focus:ring-1 focus:ring-pink-500/30 transition-colors placeholder:text-white/25"
+                              placeholder="e.g. Siva, Buddy, Star"
+                            />
+                          </div>
+                        )}
+
+                        {/* Partner Name */}
+                        {(surprise.occasion_type === 'wedding' || surprise.occasion_type === 'anniversary' || editPartnerName) && (
+                          <div className="space-y-1">
+                            <label className="text-[10px] text-white/50 uppercase tracking-widest font-mono">Partner Name (optional)</label>
+                            <input
+                              type="text"
+                              value={editPartnerName}
+                              onChange={(e) => setEditPartnerName(e.target.value)}
+                              className="w-full px-3 py-2 rounded-lg bg-black/40 border border-white/15 text-white text-sm focus:outline-none focus:border-pink-500/50 focus:ring-1 focus:ring-pink-500/30 transition-colors placeholder:text-white/25"
+                              placeholder="Enter partner name"
+                            />
+                          </div>
+                        )}
+
+                        {/* Message */}
+                        <div className="space-y-1">
+                          <label className="text-[10px] text-white/50 uppercase tracking-widest font-mono">Heartfelt Message</label>
+                          <textarea
+                            value={editMessage}
+                            onChange={(e) => setEditMessage(e.target.value)}
+                            rows={4}
+                            className="w-full px-3 py-2 rounded-lg bg-black/40 border border-white/15 text-white text-sm focus:outline-none focus:border-pink-500/50 focus:ring-1 focus:ring-pink-500/30 transition-colors placeholder:text-white/25 resize-none"
+                            placeholder="Write your heartfelt message..."
+                          />
+                        </div>
+
+                        {/* Action Buttons */}
+                        <div className="flex items-center gap-2 pt-1">
+                          <button
+                            onClick={handleSaveEdits}
+                            disabled={editSaving}
+                            className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed text-white text-xs font-semibold shadow-md transition-all active:scale-95 cursor-pointer"
+                          >
+                            {editSaving ? (
+                              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                            ) : (
+                              <Save className="w-3.5 h-3.5" />
+                            )}
+                            <span>{editSaving ? 'Saving...' : 'Save Changes'}</span>
+                          </button>
+                          <button
+                            onClick={() => {
+                              // Reset to current surprise values
+                              setEditRecipientName(surprise.recipient_name || '');
+                              setEditSenderName(surprise.sender_name || '');
+                              setEditMessage(surprise.message || '');
+                              setEditNickname(surprise.nickname || '');
+                              setEditPartnerName(surprise.partner_name || '');
+                              setIsEditPanelOpen(false);
+                            }}
+                            className="flex items-center gap-1.5 px-4 py-2 rounded-xl border border-white/20 hover:bg-white/10 text-white/70 text-xs font-medium transition-colors cursor-pointer"
+                          >
+                            <X className="w-3.5 h-3.5" />
+                            <span>Cancel</span>
+                          </button>
+                        </div>
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </motion.div>
+            )}
 
             {/* Song Player (if song exists) */}
             {surprise.song_url && (
