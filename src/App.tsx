@@ -38,6 +38,10 @@ export function App() {
         <SurprisePage
           id={surpriseId}
           onNavigateHome={() => navigateTo('/')}
+          onEditInForm={(draft) => {
+            setSelectedDraft(draft);
+            navigateTo('/create');
+          }}
         />
       );
     }

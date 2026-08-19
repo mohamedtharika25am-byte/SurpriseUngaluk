@@ -20,9 +20,14 @@ import {
   Save,
   X,
   ChevronDown,
-  ChevronUp
+  ChevronUp,
+  Wand2,
+  Music,
+  Calendar,
+  RefreshCw,
+  ExternalLink
 } from 'lucide-react';
-import { Surprise, ThemeType } from '../types';
+import { Surprise, ThemeType, OccasionType, DraftSurprise } from '../types';
 import { decodeSurpriseFromHash } from '../lib/urlHashHelper';
 import { supabase } from '../lib/supabase';
 
@@ -47,9 +52,51 @@ import { ScratchCard } from './ScratchCard';
 interface SurprisePageProps {
   id: string;
   onNavigateHome: () => void;
+  onEditInForm?: (draft: DraftSurprise) => void;
 }
 
-export const SurprisePage: React.FC<SurprisePageProps> = ({ id, onNavigateHome }) => {
+export function convertSurpriseToDraft(s: Surprise): DraftSurprise {
+  return {
+    id: s.id,
+    updated_at: new Date().toISOString(),
+    title: `${s.recipient_name}'s ${s.occasion_type.toUpperCase()} Surprise`,
+    recipient_name: s.recipient_name || '',
+    partner_name: s.partner_name || '',
+    nickname: s.nickname || '',
+    birth_date: s.birth_date || '',
+    occasion_type: s.occasion_type || 'birthday',
+    occasion_datetime: s.occasion_datetime || new Date().toISOString(),
+    sender_name: s.sender_name || '',
+    message: s.message || '',
+    timer_enabled: s.timer_enabled ?? true,
+    theme_preference: s.theme_preference || 'midnight',
+    cake_cutting_enabled: s.cake_cutting_enabled ?? true,
+    balloons_game_enabled: s.balloons_game_enabled ?? false,
+    enableBeforeAfter: !!s.before_after,
+    beforeUrl: s.before_after?.beforeUrl || '',
+    afterUrl: s.before_after?.afterUrl || '',
+    beforeLabel: s.before_after?.beforeLabel || 'Childhood / Back Then 👶',
+    afterLabel: s.before_after?.afterLabel || 'Grown Up / Stunning Today ✨',
+    spotifyUrl: s.song_url || '',
+    musicEnabled: !!s.song_url,
+    enableVoiceNote: !!s.voice_note_url,
+    voiceNoteUrl: s.voice_note_url || '',
+    balloonMessages: s.balloon_messages || [],
+    enableTimeline: !!(s.timeline_events && s.timeline_events.length > 0),
+    timelineEvents: s.timeline_events || [],
+    enableQuiz: !!(s.quiz_questions && s.quiz_questions.length > 0),
+    quizQuestions: s.quiz_questions || [],
+    enableInsideJokes: !!(s.inside_jokes && s.inside_jokes.length > 0),
+    insideJokes: s.inside_jokes || [],
+    enableHiddenMessages: !!(s.hidden_messages && s.hidden_messages.length > 0),
+    hiddenMessages: s.hidden_messages || [],
+    enableScratchCards: !!(s.scratch_cards && s.scratch_cards.length > 0),
+    scratchCards: s.scratch_cards || [],
+    photoPreviews: s.photo_urls || []
+  };
+}
+
+export const SurprisePage: React.FC<SurprisePageProps> = ({ id, onNavigateHome, onEditInForm }) => {
   const [surprise, setSurprise] = useState<Surprise | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -65,7 +112,7 @@ export const SurprisePage: React.FC<SurprisePageProps> = ({ id, onNavigateHome }
   const [currentTheme, setCurrentTheme] = useState<ThemeType>('midnight');
   const [cakeCutDone, setCakeCutDone] = useState<boolean>(false);
 
-  // Creator detection & edit panel states
+  // Creator detection & edit panel states for ALL features
   const [isCreator, setIsCreator] = useState<boolean>(false);
   const [isEditPanelOpen, setIsEditPanelOpen] = useState<boolean>(false);
   const [editRecipientName, setEditRecipientName] = useState<string>('');
@@ -73,8 +120,22 @@ export const SurprisePage: React.FC<SurprisePageProps> = ({ id, onNavigateHome }
   const [editMessage, setEditMessage] = useState<string>('');
   const [editNickname, setEditNickname] = useState<string>('');
   const [editPartnerName, setEditPartnerName] = useState<string>('');
+  const [editOccasionType, setEditOccasionType] = useState<OccasionType>('birthday');
+  const [editOccasionDatetime, setEditOccasionDatetime] = useState<string>('');
+  const [editTimerEnabled, setEditTimerEnabled] = useState<boolean>(true);
+  const [editThemePreference, setEditThemePreference] = useState<ThemeType>('midnight');
+  const [editSongUrl, setEditSongUrl] = useState<string>('');
+  const [editVoiceNoteUrl, setEditVoiceNoteUrl] = useState<string>('');
+  const [editCakeCuttingEnabled, setEditCakeCuttingEnabled] = useState<boolean>(true);
+  const [editBalloonsGameEnabled, setEditBalloonsGameEnabled] = useState<boolean>(false);
+  const [editBeforeUrl, setEditBeforeUrl] = useState<string>('');
+  const [editAfterUrl, setEditAfterUrl] = useState<string>('');
+  const [editBeforeLabel, setEditBeforeLabel] = useState<string>('');
+  const [editAfterLabel, setEditAfterLabel] = useState<string>('');
+  
   const [editSaving, setEditSaving] = useState<boolean>(false);
   const [editSavedToast, setEditSavedToast] = useState<string | null>(null);
+  const [showShareLinkCard, setShowShareLinkCard] = useState<boolean>(false);
 
   useEffect(() => {
     fetchSurprise();
@@ -101,12 +162,24 @@ export const SurprisePage: React.FC<SurprisePageProps> = ({ id, onNavigateHome }
         }
       }
 
-      // Populate edit fields
+      // Populate all edit fields
       setEditRecipientName(data.recipient_name || '');
       setEditSenderName(data.sender_name || '');
       setEditMessage(data.message || '');
       setEditNickname(data.nickname || '');
       setEditPartnerName(data.partner_name || '');
+      setEditOccasionType(data.occasion_type || 'birthday');
+      setEditOccasionDatetime(data.occasion_datetime ? data.occasion_datetime.slice(0, 16) : '');
+      setEditTimerEnabled(typeof data.timer_enabled === 'boolean' ? data.timer_enabled : true);
+      setEditThemePreference(data.theme_preference || 'midnight');
+      setEditSongUrl(data.song_url || '');
+      setEditVoiceNoteUrl(data.voice_note_url || '');
+      setEditCakeCuttingEnabled(typeof data.cake_cutting_enabled === 'boolean' ? data.cake_cutting_enabled : true);
+      setEditBalloonsGameEnabled(typeof data.balloons_game_enabled === 'boolean' ? data.balloons_game_enabled : false);
+      setEditBeforeUrl(data.before_after?.beforeUrl || '');
+      setEditAfterUrl(data.before_after?.afterUrl || '');
+      setEditBeforeLabel(data.before_after?.beforeLabel || 'Childhood / Back Then 👶');
+      setEditAfterLabel(data.before_after?.afterLabel || 'Grown Up / Stunning Today ✨');
     };
 
     // Detect if user is the creator by checking localStorage
@@ -281,10 +354,27 @@ export const SurprisePage: React.FC<SurprisePageProps> = ({ id, onNavigateHome }
     setTimeout(() => setCopiedLink(false), 2000);
   };
 
-  // Save edited surprise data
+  // Save edited surprise data for ALL options
   const handleSaveEdits = async () => {
     if (!surprise) return;
     setEditSaving(true);
+
+    const updatedBeforeAfter = (editBeforeUrl.trim() || editAfterUrl.trim()) ? {
+      beforeUrl: editBeforeUrl.trim(),
+      afterUrl: editAfterUrl.trim(),
+      beforeLabel: editBeforeLabel.trim() || 'Childhood / Back Then 👶',
+      afterLabel: editAfterLabel.trim() || 'Grown Up / Stunning Today ✨'
+    } : null;
+
+    let isoDatetime = surprise.occasion_datetime;
+    if (editOccasionDatetime) {
+      try {
+        const parsedDate = new Date(editOccasionDatetime);
+        if (!isNaN(parsedDate.getTime())) {
+          isoDatetime = parsedDate.toISOString();
+        }
+      } catch (e) {}
+    }
 
     const updatedSurprise: Surprise = {
       ...surprise,
@@ -293,6 +383,15 @@ export const SurprisePage: React.FC<SurprisePageProps> = ({ id, onNavigateHome }
       message: editMessage.trim() || surprise.message,
       nickname: editNickname.trim() || null,
       partner_name: editPartnerName.trim() || null,
+      occasion_type: editOccasionType,
+      occasion_datetime: isoDatetime,
+      timer_enabled: editTimerEnabled,
+      theme_preference: editThemePreference,
+      song_url: editSongUrl.trim() || null,
+      voice_note_url: editVoiceNoteUrl.trim() || null,
+      cake_cutting_enabled: editCakeCuttingEnabled,
+      balloons_game_enabled: editBalloonsGameEnabled,
+      before_after: updatedBeforeAfter
     };
 
     // Update localStorage
@@ -313,6 +412,15 @@ export const SurprisePage: React.FC<SurprisePageProps> = ({ id, onNavigateHome }
             message: updatedSurprise.message,
             nickname: updatedSurprise.nickname,
             partner_name: updatedSurprise.partner_name,
+            occasion_type: updatedSurprise.occasion_type,
+            occasion_datetime: updatedSurprise.occasion_datetime,
+            timer_enabled: updatedSurprise.timer_enabled,
+            theme_preference: updatedSurprise.theme_preference,
+            song_url: updatedSurprise.song_url,
+            voice_note_url: updatedSurprise.voice_note_url,
+            cake_cutting_enabled: updatedSurprise.cake_cutting_enabled,
+            balloons_game_enabled: updatedSurprise.balloons_game_enabled,
+            before_after: updatedSurprise.before_after
           })
           .eq('id', id);
       } catch (e) {
@@ -321,10 +429,14 @@ export const SurprisePage: React.FC<SurprisePageProps> = ({ id, onNavigateHome }
     }
 
     setSurprise(updatedSurprise);
+    if (updatedSurprise.theme_preference) {
+      setCurrentTheme(updatedSurprise.theme_preference);
+    }
     setEditSaving(false);
     setIsEditPanelOpen(false);
-    setEditSavedToast('Changes saved successfully! ✅');
-    setTimeout(() => setEditSavedToast(null), 3000);
+    setShowShareLinkCard(true);
+    setEditSavedToast('Edits saved successfully! Scroll to get your updated Shareable Link below. 🎉');
+    setTimeout(() => setEditSavedToast(null), 4000);
   };
 
   const getOccasionIcon = (type: string) => {
@@ -578,7 +690,7 @@ export const SurprisePage: React.FC<SurprisePageProps> = ({ id, onNavigateHome }
               <motion.div
                 initial={{ opacity: 0, y: -5 }}
                 animate={{ opacity: 1, y: 0 }}
-                className="rounded-2xl border border-pink-500/30 bg-gradient-to-r from-pink-950/60 to-violet-950/60 overflow-hidden"
+                className="rounded-2xl border border-pink-500/30 bg-gradient-to-r from-pink-950/60 to-violet-950/60 overflow-hidden shadow-2xl"
               >
                 {/* Toggle Header */}
                 <button
@@ -587,8 +699,8 @@ export const SurprisePage: React.FC<SurprisePageProps> = ({ id, onNavigateHome }
                 >
                   <div className="flex items-center gap-2">
                     <Pencil className="w-4 h-4 text-pink-400" />
-                    <span className="text-xs font-bold uppercase tracking-wider text-pink-300">Creator Edit Panel</span>
-                    <span className="text-[10px] text-white/40 font-mono">(Only you can see this)</span>
+                    <span className="text-xs font-bold uppercase tracking-wider text-pink-300">Creator Master Edit Panel</span>
+                    <span className="text-[10px] text-white/40 font-mono">(Only you can see & edit this)</span>
                   </div>
                   {isEditPanelOpen ? (
                     <ChevronUp className="w-4 h-4 text-white/50" />
@@ -607,105 +719,311 @@ export const SurprisePage: React.FC<SurprisePageProps> = ({ id, onNavigateHome }
                       transition={{ duration: 0.25 }}
                       className="overflow-hidden"
                     >
-                      <div className="px-5 pb-5 space-y-4 border-t border-white/10 pt-4">
-                        {/* Recipient Name */}
-                        <div className="space-y-1">
-                          <label className="text-[10px] text-white/50 uppercase tracking-widest font-mono">Recipient Name</label>
-                          <input
-                            type="text"
-                            value={editRecipientName}
-                            onChange={(e) => setEditRecipientName(e.target.value)}
-                            className="w-full px-3 py-2 rounded-lg bg-black/40 border border-white/15 text-white text-sm focus:outline-none focus:border-pink-500/50 focus:ring-1 focus:ring-pink-500/30 transition-colors placeholder:text-white/25"
-                            placeholder="Enter recipient name"
-                          />
-                        </div>
+                      <div className="px-5 pb-6 space-y-5 border-t border-white/10 pt-4">
 
-                        {/* Sender Name */}
-                        <div className="space-y-1">
-                          <label className="text-[10px] text-white/50 uppercase tracking-widest font-mono">Sender Name</label>
-                          <input
-                            type="text"
-                            value={editSenderName}
-                            onChange={(e) => setEditSenderName(e.target.value)}
-                            className="w-full px-3 py-2 rounded-lg bg-black/40 border border-white/15 text-white text-sm focus:outline-none focus:border-pink-500/50 focus:ring-1 focus:ring-pink-500/30 transition-colors placeholder:text-white/25"
-                            placeholder="Enter sender name"
-                          />
-                        </div>
-
-                        {/* Nickname */}
-                        {(surprise.occasion_type === 'birthday' || editNickname) && (
-                          <div className="space-y-1">
-                            <label className="text-[10px] text-white/50 uppercase tracking-widest font-mono">Nickname (optional)</label>
-                            <input
-                              type="text"
-                              value={editNickname}
-                              onChange={(e) => setEditNickname(e.target.value)}
-                              className="w-full px-3 py-2 rounded-lg bg-black/40 border border-white/15 text-white text-sm focus:outline-none focus:border-pink-500/50 focus:ring-1 focus:ring-pink-500/30 transition-colors placeholder:text-white/25"
-                              placeholder="e.g. Siva, Buddy, Star"
-                            />
+                        {/* Button to Re-Open Full Creator Form */}
+                        {onEditInForm && (
+                          <div className="p-3.5 rounded-xl bg-pink-500/10 border border-pink-500/30 flex items-center justify-between gap-3">
+                            <div>
+                              <div className="text-xs font-bold text-pink-300 flex items-center gap-1.5">
+                                <Wand2 className="w-4 h-4 text-pink-400" />
+                                <span>Re-edit in Full Creator Form</span>
+                              </div>
+                              <div className="text-[11px] text-white/60 font-light mt-0.5">
+                                Open all photos, quiz questions, timeline milestones, inside jokes & scratch cards in the interactive form editor.
+                              </div>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (surprise) {
+                                  onEditInForm(convertSurpriseToDraft(surprise));
+                                }
+                              }}
+                              className="px-3.5 py-2 rounded-xl bg-pink-600 hover:bg-pink-500 text-white text-xs font-semibold shrink-0 cursor-pointer shadow-md transition-all active:scale-95 flex items-center gap-1"
+                            >
+                              <span>Open Form Editor</span>
+                              <ExternalLink className="w-3.5 h-3.5" />
+                            </button>
                           </div>
                         )}
 
-                        {/* Partner Name */}
-                        {(surprise.occasion_type === 'wedding' || surprise.occasion_type === 'anniversary' || editPartnerName) && (
-                          <div className="space-y-1">
-                            <label className="text-[10px] text-white/50 uppercase tracking-widest font-mono">Partner Name (optional)</label>
-                            <input
-                              type="text"
-                              value={editPartnerName}
-                              onChange={(e) => setEditPartnerName(e.target.value)}
-                              className="w-full px-3 py-2 rounded-lg bg-black/40 border border-white/15 text-white text-sm focus:outline-none focus:border-pink-500/50 focus:ring-1 focus:ring-pink-500/30 transition-colors placeholder:text-white/25"
-                              placeholder="Enter partner name"
-                            />
+                        {/* SECTION 1: BASIC NAMES & RECIPIENT DETAILS */}
+                        <div className="space-y-3">
+                          <h5 className="text-xs font-bold text-pink-400 uppercase tracking-widest font-mono flex items-center gap-1.5">
+                            <span>1. Names & Recipient Details</span>
+                          </h5>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <div className="space-y-1">
+                              <label className="text-[10px] text-white/50 uppercase tracking-widest font-mono">Recipient Name</label>
+                              <input
+                                type="text"
+                                value={editRecipientName}
+                                onChange={(e) => setEditRecipientName(e.target.value)}
+                                className="w-full px-3 py-2 rounded-lg bg-black/40 border border-white/15 text-white text-sm focus:outline-none focus:border-pink-500/50"
+                                placeholder="Recipient name"
+                              />
+                            </div>
+                            <div className="space-y-1">
+                              <label className="text-[10px] text-white/50 uppercase tracking-widest font-mono">Sender Name</label>
+                              <input
+                                type="text"
+                                value={editSenderName}
+                                onChange={(e) => setEditSenderName(e.target.value)}
+                                className="w-full px-3 py-2 rounded-lg bg-black/40 border border-white/15 text-white text-sm focus:outline-none focus:border-pink-500/50"
+                                placeholder="Your name (Sender)"
+                              />
+                            </div>
+                            <div className="space-y-1">
+                              <label className="text-[10px] text-white/50 uppercase tracking-widest font-mono">Nickname (optional)</label>
+                              <input
+                                type="text"
+                                value={editNickname}
+                                onChange={(e) => setEditNickname(e.target.value)}
+                                className="w-full px-3 py-2 rounded-lg bg-black/40 border border-white/15 text-white text-sm focus:outline-none focus:border-pink-500/50"
+                                placeholder="Nickname"
+                              />
+                            </div>
+                            <div className="space-y-1">
+                              <label className="text-[10px] text-white/50 uppercase tracking-widest font-mono">Partner Name (optional)</label>
+                              <input
+                                type="text"
+                                value={editPartnerName}
+                                onChange={(e) => setEditPartnerName(e.target.value)}
+                                className="w-full px-3 py-2 rounded-lg bg-black/40 border border-white/15 text-white text-sm focus:outline-none focus:border-pink-500/50"
+                                placeholder="Partner name"
+                              />
+                            </div>
                           </div>
-                        )}
-
-                        {/* Message */}
-                        <div className="space-y-1">
-                          <label className="text-[10px] text-white/50 uppercase tracking-widest font-mono">Heartfelt Message</label>
-                          <textarea
-                            value={editMessage}
-                            onChange={(e) => setEditMessage(e.target.value)}
-                            rows={4}
-                            className="w-full px-3 py-2 rounded-lg bg-black/40 border border-white/15 text-white text-sm focus:outline-none focus:border-pink-500/50 focus:ring-1 focus:ring-pink-500/30 transition-colors placeholder:text-white/25 resize-none"
-                            placeholder="Write your heartfelt message..."
-                          />
                         </div>
 
-                        {/* Action Buttons */}
-                        <div className="flex items-center gap-2 pt-1">
+                        {/* SECTION 2: OCCASION & COUNTDOWN TIMER */}
+                        <div className="space-y-3 pt-2 border-t border-white/10">
+                          <h5 className="text-xs font-bold text-pink-400 uppercase tracking-widest font-mono">
+                            2. Occasion & Reveal Countdown
+                          </h5>
+                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                            <div className="space-y-1">
+                              <label className="text-[10px] text-white/50 uppercase tracking-widest font-mono">Occasion Type</label>
+                              <select
+                                value={editOccasionType}
+                                onChange={(e) => setEditOccasionType(e.target.value as OccasionType)}
+                                className="w-full px-3 py-2 rounded-lg bg-black/40 border border-white/15 text-white text-sm focus:outline-none focus:border-pink-500/50"
+                              >
+                                <option value="birthday" className="bg-slate-900">Birthday 🎂</option>
+                                <option value="wedding" className="bg-slate-900">Wedding 💍</option>
+                                <option value="anniversary" className="bg-slate-900">Anniversary ❤️</option>
+                              </select>
+                            </div>
+                            <div className="space-y-1">
+                              <label className="text-[10px] text-white/50 uppercase tracking-widest font-mono">Reveal Date & Time</label>
+                              <input
+                                type="datetime-local"
+                                value={editOccasionDatetime}
+                                onChange={(e) => setEditOccasionDatetime(e.target.value)}
+                                className="w-full px-3 py-2 rounded-lg bg-black/40 border border-white/15 text-white text-sm focus:outline-none focus:border-pink-500/50"
+                              />
+                            </div>
+                            <div className="space-y-1">
+                              <label className="text-[10px] text-white/50 uppercase tracking-widest font-mono">Countdown Timer</label>
+                              <select
+                                value={editTimerEnabled ? 'yes' : 'no'}
+                                onChange={(e) => setEditTimerEnabled(e.target.value === 'yes')}
+                                className="w-full px-3 py-2 rounded-lg bg-black/40 border border-white/15 text-white text-sm focus:outline-none focus:border-pink-500/50"
+                              >
+                                <option value="yes" className="bg-slate-900">Enabled (With Countdown) ⏳</option>
+                                <option value="no" className="bg-slate-900">Disabled (Instant Unlock) ⚡</option>
+                              </select>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* SECTION 3: THEME & HEARTFELT MESSAGE */}
+                        <div className="space-y-3 pt-2 border-t border-white/10">
+                          <h5 className="text-xs font-bold text-pink-400 uppercase tracking-widest font-mono">
+                            3. Visual Theme & Heartfelt Message
+                          </h5>
+                          <div className="space-y-3">
+                            <div className="space-y-1">
+                              <label className="text-[10px] text-white/50 uppercase tracking-widest font-mono">Theme Style</label>
+                              <select
+                                value={editThemePreference}
+                                onChange={(e) => setEditThemePreference(e.target.value as ThemeType)}
+                                className="w-full px-3 py-2 rounded-lg bg-black/40 border border-white/15 text-white text-sm focus:outline-none focus:border-pink-500/50"
+                              >
+                                <option value="midnight" className="bg-slate-900">Midnight Amethyst 🌌</option>
+                                <option value="romance" className="bg-slate-900">Rose Gold Romance 🌹</option>
+                                <option value="celestial" className="bg-slate-900">Golden Celestial ✨</option>
+                                <option value="cyber" className="bg-slate-900">Neon Cyberpunk ⚡</option>
+                              </select>
+                            </div>
+                            <div className="space-y-1">
+                              <label className="text-[10px] text-white/50 uppercase tracking-widest font-mono">Heartfelt Message</label>
+                              <textarea
+                                value={editMessage}
+                                onChange={(e) => setEditMessage(e.target.value)}
+                                rows={4}
+                                className="w-full px-3 py-2 rounded-lg bg-black/40 border border-white/15 text-white text-sm focus:outline-none focus:border-pink-500/50 resize-none"
+                                placeholder="Write your custom surprise message..."
+                              />
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* SECTION 4: MUSIC & VOICE NOTE */}
+                        <div className="space-y-3 pt-2 border-t border-white/10">
+                          <h5 className="text-xs font-bold text-pink-400 uppercase tracking-widest font-mono">
+                            4. Music & Audio Options
+                          </h5>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <div className="space-y-1">
+                              <label className="text-[10px] text-white/50 uppercase tracking-widest font-mono">Background Song / Spotify URL</label>
+                              <input
+                                type="text"
+                                value={editSongUrl}
+                                onChange={(e) => setEditSongUrl(e.target.value)}
+                                className="w-full px-3 py-2 rounded-lg bg-black/40 border border-white/15 text-white text-sm focus:outline-none focus:border-pink-500/50"
+                                placeholder="https://open.spotify.com/track/... or MP3 link"
+                              />
+                            </div>
+                            <div className="space-y-1">
+                              <label className="text-[10px] text-white/50 uppercase tracking-widest font-mono">Voice Note Audio URL</label>
+                              <input
+                                type="text"
+                                value={editVoiceNoteUrl}
+                                onChange={(e) => setEditVoiceNoteUrl(e.target.value)}
+                                className="w-full px-3 py-2 rounded-lg bg-black/40 border border-white/15 text-white text-sm focus:outline-none focus:border-pink-500/50"
+                                placeholder="Audio stream or base64 URL"
+                              />
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* SECTION 5: INTERACTIVE CEREMONIES & BEFORE/AFTER */}
+                        <div className="space-y-3 pt-2 border-t border-white/10">
+                          <h5 className="text-xs font-bold text-pink-400 uppercase tracking-widest font-mono">
+                            5. Interactive Ceremonies & Before/After Photos
+                          </h5>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <div className="space-y-1">
+                              <label className="text-[10px] text-white/50 uppercase tracking-widest font-mono">Cake Cutting Ceremony</label>
+                              <select
+                                value={editCakeCuttingEnabled ? 'yes' : 'no'}
+                                onChange={(e) => setEditCakeCuttingEnabled(e.target.value === 'yes')}
+                                className="w-full px-3 py-2 rounded-lg bg-black/40 border border-white/15 text-white text-sm focus:outline-none focus:border-pink-500/50"
+                              >
+                                <option value="yes" className="bg-slate-900">Enabled 🎂</option>
+                                <option value="no" className="bg-slate-900">Disabled 🚫</option>
+                              </select>
+                            </div>
+                            <div className="space-y-1">
+                              <label className="text-[10px] text-white/50 uppercase tracking-widest font-mono">Balloons Pop Game</label>
+                              <select
+                                value={editBalloonsGameEnabled ? 'yes' : 'no'}
+                                onChange={(e) => setEditBalloonsGameEnabled(e.target.value === 'yes')}
+                                className="w-full px-3 py-2 rounded-lg bg-black/40 border border-white/15 text-white text-sm focus:outline-none focus:border-pink-500/50"
+                              >
+                                <option value="yes" className="bg-slate-900">Enabled 🎈</option>
+                                <option value="no" className="bg-slate-900">Disabled 🚫</option>
+                              </select>
+                            </div>
+                            <div className="space-y-1">
+                              <label className="text-[10px] text-white/50 uppercase tracking-widest font-mono">Before Photo URL</label>
+                              <input
+                                type="text"
+                                value={editBeforeUrl}
+                                onChange={(e) => setEditBeforeUrl(e.target.value)}
+                                className="w-full px-3 py-2 rounded-lg bg-black/40 border border-white/15 text-white text-sm focus:outline-none focus:border-pink-500/50"
+                                placeholder="Childhood / earlier photo URL"
+                              />
+                            </div>
+                            <div className="space-y-1">
+                              <label className="text-[10px] text-white/50 uppercase tracking-widest font-mono">After Photo URL</label>
+                              <input
+                                type="text"
+                                value={editAfterUrl}
+                                onChange={(e) => setEditAfterUrl(e.target.value)}
+                                className="w-full px-3 py-2 rounded-lg bg-black/40 border border-white/15 text-white text-sm focus:outline-none focus:border-pink-500/50"
+                                placeholder="Present day photo URL"
+                              />
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Save Action Buttons */}
+                        <div className="flex items-center gap-3 pt-3 border-t border-white/10">
                           <button
                             onClick={handleSaveEdits}
                             disabled={editSaving}
-                            className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed text-white text-xs font-semibold shadow-md transition-all active:scale-95 cursor-pointer"
+                            className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 disabled:opacity-50 disabled:cursor-not-allowed text-white text-xs font-semibold shadow-lg transition-all active:scale-95 cursor-pointer flex items-center gap-2"
                           >
                             {editSaving ? (
-                              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                              <Loader2 className="w-4 h-4 animate-spin" />
                             ) : (
-                              <Save className="w-3.5 h-3.5" />
+                              <Save className="w-4 h-4" />
                             )}
-                            <span>{editSaving ? 'Saving...' : 'Save Changes'}</span>
+                            <span>{editSaving ? 'Saving Edits...' : 'Save Edits & Generate Share Link 🔗'}</span>
                           </button>
                           <button
-                            onClick={() => {
-                              // Reset to current surprise values
-                              setEditRecipientName(surprise.recipient_name || '');
-                              setEditSenderName(surprise.sender_name || '');
-                              setEditMessage(surprise.message || '');
-                              setEditNickname(surprise.nickname || '');
-                              setEditPartnerName(surprise.partner_name || '');
-                              setIsEditPanelOpen(false);
-                            }}
-                            className="flex items-center gap-1.5 px-4 py-2 rounded-xl border border-white/20 hover:bg-white/10 text-white/70 text-xs font-medium transition-colors cursor-pointer"
+                            onClick={() => setIsEditPanelOpen(false)}
+                            className="px-4 py-2.5 rounded-xl border border-white/20 hover:bg-white/10 text-white/70 text-xs font-medium transition-colors cursor-pointer flex items-center gap-1.5"
                           >
                             <X className="w-3.5 h-3.5" />
-                            <span>Cancel</span>
+                            <span>Close Panel</span>
                           </button>
                         </div>
                       </div>
                     </motion.div>
                   )}
                 </AnimatePresence>
+              </motion.div>
+            )}
+
+            {/* Generate Shareable Surprise Link Card (shown after saving edits or when requested) */}
+            {isCreator && (
+              <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="p-6 sm:p-8 rounded-3xl bg-gradient-to-r from-purple-950/80 via-pink-950/80 to-indigo-950/80 border border-pink-500/40 shadow-2xl space-y-4 glow-pink"
+              >
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-2.5 text-pink-300 font-bold uppercase tracking-wider text-xs sm:text-sm font-mono">
+                    <Share2 className="w-5 h-5 text-pink-400 shrink-0" />
+                    <span>Generate Shareable Surprise Link 🔗</span>
+                  </div>
+                  <span className="px-2.5 py-1 rounded-full bg-emerald-500/20 text-emerald-300 text-[10px] font-mono border border-emerald-500/30">
+                    Saved & Ready
+                  </span>
+                </div>
+
+                <p className="text-xs sm:text-sm text-white/70 font-light">
+                  Your surprise edits have been saved to local storage and the database! Copy and send this unique shareable link to <strong>{surprise.recipient_name}</strong>:
+                </p>
+
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 pt-1">
+                  <input
+                    type="text"
+                    readOnly
+                    value={window.location.href}
+                    className="w-full px-4 py-3 rounded-xl bg-black/60 border border-white/20 text-white font-mono text-xs sm:text-sm focus:outline-none select-all"
+                  />
+                  <button
+                    onClick={handleCopyLink}
+                    className="px-6 py-3 rounded-xl bg-gradient-to-r from-pink-600 to-violet-600 hover:from-pink-500 hover:to-violet-500 text-white text-xs sm:text-sm font-semibold shadow-lg transition-all active:scale-95 cursor-pointer flex items-center justify-center gap-2 shrink-0"
+                  >
+                    {copiedLink ? (
+                      <>
+                        <Check className="w-4 h-4 text-emerald-300" />
+                        <span>Link Copied!</span>
+                      </>
+                    ) : (
+                      <>
+                        <Copy className="w-4 h-4" />
+                        <span>Copy Shareable Link</span>
+                      </>
+                    )}
+                  </button>
+                </div>
               </motion.div>
             )}
 
