@@ -349,7 +349,11 @@ export const SurprisePage: React.FC<SurprisePageProps> = ({ id, onNavigateHome, 
   };
 
   const handleCopyLink = () => {
-    navigator.clipboard.writeText(window.location.href);
+    const cleanUrl = window.location.href
+      .replace(/([?&])preview=true(&|$)/, '$1')
+      .replace(/\?$/, '')
+      .replace(/&$/, '');
+    navigator.clipboard.writeText(cleanUrl);
     setCopiedLink(true);
     setTimeout(() => setCopiedLink(false), 2000);
   };
